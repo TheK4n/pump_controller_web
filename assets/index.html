@@ -2,26 +2,25 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
-    <title>IoT Контроллер давления насоса | 0–8 атм | Точная шкала 0.1 атм</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>IoT Контроллер давления насоса | 0–8 атм</title>
     <style>
         * {
             box-sizing: border-box;
-            user-select: none; /* улучшение тактильного опыта, не блокирует ввод */
+            user-select: none;
         }
 
         body {
             margin: 0;
             min-height: 100vh;
             background: linear-gradient(145deg, #e0e5ec 0%, #cbd0d9 100%);
-            font-family: 'Segoe UI', 'Roboto', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
 
-        /* карточка прибора */
         .dashboard {
             max-width: 900px;
             width: 100%;
@@ -30,15 +29,12 @@
             border-radius: 64px 64px 48px 48px;
             box-shadow: 0 20px 35px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.6);
             padding: 24px 20px 35px;
-            transition: all 0.2s ease;
         }
 
-        /* контейнер манометра */
         .gauge-container {
             display: flex;
             justify-content: center;
-            align-items: center;
-            margin: 10px 0 15px 0;
+            margin: 10px 0 15px;
         }
 
         canvas {
@@ -52,51 +48,24 @@
             display: block;
         }
 
-        /* fallback для старых браузеров */
-        @supports not (aspect-ratio: 1 / 1) {
-            .gauge-container {
-                position: relative;
-                width: 100%;
-                max-width: 480px;
-                margin: 0 auto;
-            }
-            .gauge-container::before {
-                content: "";
-                display: block;
-                padding-top: 100%;
-            }
-            canvas {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-            }
-        }
-
         .pressure-value {
             text-align: center;
             font-size: 1.9rem;
             font-weight: 700;
-            margin-top: -5px;
-            margin-bottom: 20px;
+            margin: -5px auto 20px;
             color: #1f2a3e;
             background: rgba(255, 255, 240, 0.75);
-            display: inline-block;
-            width: auto;
             padding: 6px 28px;
             border-radius: 60px;
             backdrop-filter: blur(4px);
-            letter-spacing: 1px;
-            font-family: 'JetBrains Mono', monospace;
+            display: inline-block;
+            width: auto;
         }
 
         .value-wrapper {
-            display: flex;
-            justify-content: center;
+            text-align: center;
         }
 
-        /* панель ползунков (под большими пальцами) */
         .sliders-panel {
             background: #eef2f7;
             border-radius: 48px;
@@ -116,7 +85,6 @@
             color: #1e2b3c;
             font-size: 1.2rem;
             margin-bottom: 12px;
-            letter-spacing: -0.2px;
         }
 
         .slider-group span {
@@ -125,7 +93,6 @@
             padding: 4px 14px;
             border-radius: 30px;
             font-size: 0.9rem;
-            font-weight: 500;
         }
 
         input[type="range"] {
@@ -134,12 +101,7 @@
             -webkit-appearance: none;
             background: linear-gradient(90deg, #2c7da0, #61a5c2);
             border-radius: 12px;
-            outline: none;
             cursor: pointer;
-        }
-
-        input[type="range"]:focus {
-            outline: none;
         }
 
         input[type="range"]::-webkit-slider-thumb {
@@ -151,21 +113,11 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             border: 2px solid white;
             cursor: pointer;
-            transition: 0.08s;
+            transition: transform 0.08s;
         }
 
         input[type="range"]::-webkit-slider-thumb:active {
             transform: scale(1.15);
-            background: #0f4b70;
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 34px;
-            height: 34px;
-            background: #1f6392;
-            border-radius: 50%;
-            border: 2px solid white;
-            cursor: pointer;
         }
 
         .threshold-hint {
@@ -174,29 +126,21 @@
             margin-top: 8px;
             font-size: 0.75rem;
             color: #2c3e50;
-            padding: 0 6px;
-            font-weight: 500;
         }
 
         .save-btn {
             width: 100%;
             background: #2b6e4f;
             border: none;
-            padding: 16px 12px;
+            padding: 16px;
             font-size: 1.35rem;
             font-weight: bold;
             color: white;
             border-radius: 60px;
             margin-top: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
             cursor: pointer;
             box-shadow: 0 6px 0 #1b4d36;
-            transition: 0.08s linear;
-            font-family: inherit;
-            letter-spacing: 1px;
+            transition: transform 0.08s, box-shadow 0.08s;
         }
 
         .save-btn:active {
@@ -206,8 +150,7 @@
 
         .toast-msg {
             visibility: hidden;
-            min-width: 210px;
-            background-color: #1e2f3c;
+            background: rgba(30, 47, 60, 0.92);
             color: #e9f5e9;
             text-align: center;
             border-radius: 40px;
@@ -216,15 +159,11 @@
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 1rem;
-            font-weight: 500;
             opacity: 0;
-            transition: opacity 0.2s, visibility 0.2s;
+            transition: opacity 0.2s;
             z-index: 1000;
-            backdrop-filter: blur(12px);
-            background-color: rgba(30, 47, 60, 0.92);
             pointer-events: none;
-            font-family: monospace;
+            white-space: nowrap;
         }
 
         .toast-msg.show {
@@ -233,28 +172,10 @@
         }
 
         @media (max-width: 550px) {
-            .dashboard {
-                padding: 18px 16px 30px;
-            }
-            .slider-group label {
-                font-size: 1rem;
-            }
-            .save-btn {
-                padding: 14px 12px;
-                font-size: 1.2rem;
-            }
-            .pressure-value {
-                font-size: 1.5rem;
-            }
-        }
-
-        @media (min-width: 1200px) {
-            .dashboard {
-                max-width: 950px;
-            }
-            canvas {
-                max-width: 500px;
-            }
+            .dashboard { padding: 18px 16px 30px; }
+            .slider-group label { font-size: 1rem; }
+            .save-btn { font-size: 1.2rem; }
+            .pressure-value { font-size: 1.5rem; }
         }
 
         footer {
@@ -263,71 +184,47 @@
             margin-top: 22px;
             color: #2c4359;
             opacity: 0.75;
-            letter-spacing: 0.3px;
         }
     </style>
 </head>
 <body>
 <div class="dashboard">
     <div class="gauge-container">
-        <canvas id="manometerCanvas" width="500" height="500">
-            Ваш браузер не поддерживает Canvas
-        </canvas>
+        <canvas id="manometerCanvas" width="500" height="500"></canvas>
     </div>
     <div class="value-wrapper">
         <div class="pressure-value" id="currentPressureDisplay">0.0 атм</div>
     </div>
 
-    <!-- Панель ползунков: нижний и верхний пороги -->
     <div class="sliders-panel">
         <div class="slider-group">
             <label>
-                🔽 НИЖНИЙ ПОРОГ (включение насоса)
+                Нижний порог (включение)
                 <span id="minThresholdVal">1.40</span> атм
             </label>
             <input type="range" id="minSlider" min="0" max="8" step="0.05" value="1.4">
-            <div class="threshold-hint">
-                <span>0 атм</span>
-                <span>давление ≤ порога → запуск насоса</span>
-                <span>8 атм</span>
-            </div>
         </div>
 
         <div class="slider-group">
             <label>
-                🔼 ВЕРХНИЙ ПОРОГ (выключение насоса)
+                Верхний порог (выключение)
                 <span id="maxThresholdVal">6.20</span> атм
             </label>
             <input type="range" id="maxSlider" min="0" max="8" step="0.05" value="6.2">
-            <div class="threshold-hint">
-                <span>0 атм</span>
-                <span>давление ≥ порога → остановка насоса</span>
-                <span>8 атм</span>
-            </div>
         </div>
 
-        <button class="save-btn" id="saveButton">
-            💾 СОХРАНИТЬ ЗНАЧЕНИЯ
-        </button>
+        <button class="save-btn" id="saveButton">💾 СОХРАНИТЬ ЗНАЧЕНИЯ</button>
     </div>
-    <footer>Манометр с ценой деления 0.1 атм | Жирные засечки порогов | Металлическая стрелка с хвостовиком</footer>
 </div>
-<div id="toastMsg" class="toast-msg">✔️ Пороги сохранены</div>
+<div id="toastMsg" class="toast-msg">✓ Пороги сохранены</div>
 
 <script>
-    (function(){
-        // ----- НОВАЯ ШКАЛА: 0 .. 8 атмосфер -----
-        const MIN_GAUGE = 0;
-        const MAX_GAUGE = 8;
-
-        // ----- Исходные пороги -----
-        let minPressure = 1.4;      // нижний порог (вкл.)
-        let maxPressure = 6.2;      // верхний порог (выкл.)
-
-        // ----- Текущее давление (симуляция датчика) -----
-        let currentPressure = 2.7;
-        let pressureDirection = 1;   // 1 = рост, -1 = падение
-        let simulationInterval = null;
+    (function() {
+        // Константы
+        const MIN_PRESSURE = 0;
+        const MAX_PRESSURE = 8;
+        const START_ANGLE = -225; // градусы
+        const END_ANGLE = 45;
 
         // DOM элементы
         const canvas = document.getElementById('manometerCanvas');
@@ -336,42 +233,106 @@
         const maxSlider = document.getElementById('maxSlider');
         const minSpan = document.getElementById('minThresholdVal');
         const maxSpan = document.getElementById('maxThresholdVal');
-        const currentPressureSpan = document.getElementById('currentPressureDisplay');
+        const pressureDisplay = document.getElementById('currentPressureDisplay');
         const saveBtn = document.getElementById('saveButton');
         const toast = document.getElementById('toastMsg');
 
-        // ----- Вспомогательные функции -----
-        function degToRad(deg) {
-            return (deg * Math.PI) / 180;
+        // Состояние
+        let minThreshold = 1.4;
+        let maxThreshold = 6.2;
+        let currentPressure = 2.7;
+        let pressureDirection = 1;
+        let animationFrameId = null;
+        let lastTimestamp = 0;
+
+        // Предрасчет для отрисовки шкалы (кеширование)
+        let cachedScale = null;
+        let canvasWidth = 500, canvasHeight = 500;
+
+        // Утилиты
+        const degToRad = (deg) => (deg * Math.PI) / 180;
+
+        // Предрасчет всех меток шкалы (оптимизация)
+        function buildScaleCache() {
+            const cache = [];
+            const centerX = canvasWidth / 2;
+            const centerY = canvasHeight / 2;
+            const radius = canvasWidth * 0.42;
+            const startRad = degToRad(START_ANGLE);
+            const endRad = degToRad(END_ANGLE);
+            const angleRange = endRad - startRad;
+
+            for (let p = MIN_PRESSURE; p <= MAX_PRESSURE + 0.01; p += 0.1) {
+                const pressure = Math.round(p * 10) / 10;
+                if (pressure > MAX_PRESSURE) continue;
+
+                const t = (pressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE);
+                const angle = startRad + t * angleRange;
+
+                const isFullAtm = Math.abs(pressure - Math.round(pressure)) < 0.01;
+                const isHalfAtm = !isFullAtm && (Math.abs(pressure * 2 - Math.round(pressure * 2)) < 0.05);
+
+                let innerR, outerR, lineWidth;
+                if (isFullAtm) {
+                    innerR = radius - 18;
+                    outerR = radius + 8;
+                    lineWidth = 2.8;
+                } else if (isHalfAtm) {
+                    innerR = radius - 13;
+                    outerR = radius + 5;
+                    lineWidth = 2.0;
+                } else {
+                    innerR = radius - 9;
+                    outerR = radius + 2;
+                    lineWidth = 1.2;
+                }
+
+                const x1 = centerX + innerR * Math.cos(angle);
+                const y1 = centerY + innerR * Math.sin(angle);
+                const x2 = centerX + outerR * Math.cos(angle);
+                const y2 = centerY + outerR * Math.sin(angle);
+
+                cache.push({
+                    pressure,
+                    isFullAtm,
+                    x1, y1, x2, y2,
+                    lineWidth,
+                    textX: isFullAtm ? centerX + (radius - 27) * Math.cos(angle) - 8 : null,
+                    textY: isFullAtm ? centerY + (radius - 27) * Math.sin(angle) + 7 : null
+                });
+            }
+            return cache;
         }
 
-        // Установка размеров canvas + отрисовка
-        function resizeAndDraw() {
-            const container = canvas.parentElement;
-            const size = Math.min(container.clientWidth, 480);
-            canvas.style.width = `${size}px`;
-            canvas.style.height = `${size}px`;
-            canvas.width = 500;
-            canvas.height = 500;
-            drawGauge();
+        // Отрисовка шкалы из кеша
+        function drawScale() {
+            if (!cachedScale) return;
+
+            for (const mark of cachedScale) {
+                ctx.beginPath();
+                ctx.moveTo(mark.x1, mark.y1);
+                ctx.lineTo(mark.x2, mark.y2);
+                ctx.lineWidth = mark.lineWidth;
+                ctx.strokeStyle = '#2f415b';
+                ctx.stroke();
+
+                if (mark.isFullAtm && mark.textX !== null) {
+                    ctx.font = `600 ${canvasWidth * 0.048}px "Segoe UI"`;
+                    ctx.fillStyle = '#2c4b67';
+                    ctx.fillText(Math.round(mark.pressure).toString(), mark.textX, mark.textY);
+                }
+            }
         }
 
-        function drawHeavyThresholdMark(pressureValue, color, outlineColor = '#221c15', isLow = true) {
-            if (pressureValue < MIN_GAUGE) pressureValue = MIN_GAUGE;
-            if (pressureValue > MAX_GAUGE) pressureValue = MAX_GAUGE;
-            const w = canvas.width;
-            const h = canvas.height;
-            const centerX = w / 2;
-            const centerY = h / 2;
+        function drawThresholdMark(pressure, color) {
+            const w = canvas.width, h = canvas.height;
+            const centerX = w / 2, centerY = h / 2;
             const radius = w * 0.42;
-            const startAngle = degToRad(-225);
-            const endAngle = degToRad(45);
-            const angleRange = endAngle - startAngle;
-            let t = (pressureValue - MIN_GAUGE) / (MAX_GAUGE - MIN_GAUGE);
-            t = Math.min(Math.max(t, 0), 1);
-            let angle = startAngle + t * angleRange;
+            const startRad = degToRad(START_ANGLE);
+            const endRad = degToRad(END_ANGLE);
+            const t = Math.min(Math.max((pressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE), 0), 1);
+            const angle = startRad + t * (endRad - startRad);
 
-            // Жирная засечка: радиальная линия, выступающая внутрь и наружу
             const innerRad = radius - 18;
             const outerRad = radius + 22;
             const x1 = centerX + innerRad * Math.cos(angle);
@@ -387,44 +348,28 @@
             ctx.shadowBlur = 2;
             ctx.shadowColor = "rgba(0,0,0,0.3)";
             ctx.stroke();
-            // Дополнительный внутренний блик для выразительности
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(centerX + (innerRad+3) * Math.cos(angle), centerY + (innerRad+3) * Math.sin(angle));
-            ctx.lineWidth = 2.5;
-            ctx.strokeStyle = "#fff9e0";
-            ctx.stroke();
+            ctx.shadowBlur = 0;
         }
 
-        // ---- Профессиональная металлическая стрелка с хвостовиком (реалистичный манометр) ----
-        function drawMetalPointer(angle, centerX, centerY, radius) {
-            // Длина основной стрелки (от центра до острия)
+        // Отрисовка стрелки (упрощенная и быстрая)
+        function drawPointer(angle, centerX, centerY, radius) {
             const mainLength = radius - 20;
-            // Длина хвостовика (противовес, как у реальных манометров)
             const tailLength = radius * 0.27;
-
-            // Угол для хвостовика (противоположное направление)
-            const tailAngle = angle + Math.PI;
-
-            // ---- Геометрия основной стрелки (трапециевидная, сужающаяся к концу) ----
-            const baseWidth = 18;      // ширина у основания (ступица)
-            const tipWidth = 4;        // ширина на конце
-
-            // Вектор направления стрелки
             const dirX = Math.cos(angle);
             const dirY = Math.sin(angle);
-            // Перпендикулярный вектор (для ширины)
             const perpX = -Math.sin(angle);
             const perpY = Math.cos(angle);
 
-            // Точки основания (около центра, но с отступом, чтобы не перекрывать ступицу)
+            // Тело стрелки
             const baseDist = 14;
+            const baseWidth = 18;
+            const tipWidth = 4;
+
             const baseLeftX = centerX + baseDist * dirX + (baseWidth/2) * perpX;
             const baseLeftY = centerY + baseDist * dirY + (baseWidth/2) * perpY;
             const baseRightX = centerX + baseDist * dirX - (baseWidth/2) * perpX;
             const baseRightY = centerY + baseDist * dirY - (baseWidth/2) * perpY;
 
-            // Точки острия
             const tipX = centerX + mainLength * dirX;
             const tipY = centerY + mainLength * dirY;
             const tipLeftX = tipX + (tipWidth/2) * perpX;
@@ -432,7 +377,6 @@
             const tipRightX = tipX - (tipWidth/2) * perpX;
             const tipRightY = tipY - (tipWidth/2) * perpY;
 
-            // Рисуем тело стрелки (полигон)
             ctx.beginPath();
             ctx.moveTo(baseLeftX, baseLeftY);
             ctx.lineTo(tipLeftX, tipLeftY);
@@ -440,48 +384,32 @@
             ctx.lineTo(baseRightX, baseRightY);
             ctx.closePath();
 
-            // Металлический градиент (хром/сталь)
             const metalGrad = ctx.createLinearGradient(
                 centerX + dirX * 10, centerY + dirY * 10,
                 centerX + dirX * (mainLength - 15), centerY + dirY * (mainLength - 15)
             );
             metalGrad.addColorStop(0, '#e0e5ec');
-            metalGrad.addColorStop(0.3, '#b0b6c2');
-            metalGrad.addColorStop(0.7, '#8f95a1');
+            metalGrad.addColorStop(0.5, '#9aa0ac');
             metalGrad.addColorStop(1, '#cbd0d9');
             ctx.fillStyle = metalGrad;
             ctx.fill();
+            ctx.strokeStyle = '#4f5a66';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
 
-            // Добавляем центральную световую полосу (эффект фаски)
-            ctx.beginPath();
-            const ridgeWidth = 3.5;
-            const ridgeLeftX = centerX + baseDist * dirX + (ridgeWidth) * perpX;
-            const ridgeLeftY = centerY + baseDist * dirY + (ridgeWidth) * perpY;
-            const ridgeRightX = centerX + baseDist * dirX - (ridgeWidth) * perpX;
-            const ridgeRightY = centerY + baseDist * dirY - (ridgeWidth) * perpY;
-            const ridgeTipL = tipX + 2 * perpX;
-            const ridgeTipR = tipX - 2 * perpX;
-            ctx.moveTo(ridgeLeftX, ridgeLeftY);
-            ctx.lineTo(ridgeTipL, tipY);
-            ctx.lineTo(ridgeTipR, tipY);
-            ctx.lineTo(ridgeRightX, ridgeRightY);
-            ctx.fillStyle = "rgba(255, 255, 245, 0.5)";
-            ctx.fill();
-
-            // ---- Хвостовик (противовес) - закруглённая лопатка как у настоящих манометров ----
-            const tailBaseDist = 12;
-            const tailWidth = 12;
-            const tailLengthScaled = tailLength;
-
+            // Хвостовик
+            const tailAngle = angle + Math.PI;
             const tailDirX = Math.cos(tailAngle);
             const tailDirY = Math.sin(tailAngle);
             const tailPerpX = -Math.sin(tailAngle);
             const tailPerpY = Math.cos(tailAngle);
 
+            const tailBaseDist = 12;
+            const tailWidth = 12;
+            const tailEndX = centerX + tailLength * tailDirX;
+            const tailEndY = centerY + tailLength * tailDirY;
             const tailBaseX = centerX + tailBaseDist * tailDirX;
             const tailBaseY = centerY + tailBaseDist * tailDirY;
-            const tailEndX = centerX + tailLengthScaled * tailDirX;
-            const tailEndY = centerY + tailLengthScaled * tailDirY;
 
             const tailLeftX = tailBaseX + (tailWidth/2) * tailPerpX;
             const tailLeftY = tailBaseY + (tailWidth/2) * tailPerpY;
@@ -497,323 +425,160 @@
             ctx.lineTo(tailEndLeftX, tailEndLeftY);
             ctx.lineTo(tailEndRightX, tailEndRightY);
             ctx.lineTo(tailRightX, tailRightY);
-            ctx.closePath();
-            const tailGrad = ctx.createLinearGradient(tailBaseX, tailBaseY, tailEndX, tailEndY);
-            tailGrad.addColorStop(0, '#a0a6b2');
-            tailGrad.addColorStop(1, '#6e7480');
-            ctx.fillStyle = tailGrad;
+            ctx.fillStyle = '#8f95a1';
             ctx.fill();
-
-            // контур для четкости
-            ctx.beginPath();
-            ctx.moveTo(baseLeftX, baseLeftY);
-            ctx.lineTo(tipLeftX, tipLeftY);
-            ctx.lineTo(tipRightX, tipRightY);
-            ctx.lineTo(baseRightX, baseRightY);
-            ctx.closePath();
-            ctx.lineWidth = 0.8;
-            ctx.strokeStyle = "#4f5a66";
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(tailLeftX, tailLeftY);
-            ctx.lineTo(tailEndLeftX, tailEndLeftY);
-            ctx.lineTo(tailEndRightX, tailEndRightY);
-            ctx.lineTo(tailRightX, tailRightY);
-            ctx.closePath();
             ctx.stroke();
         }
 
-        // ---- Главная функция отрисовки манометра с частой шкалой (цена деления 0.1 атм) ----
+        // Основная отрисовка
         function drawGauge() {
             if (!ctx) return;
-            const w = canvas.width;
-            const h = canvas.height;
-            const centerX = w / 2;
-            const centerY = h / 2;
+
+            const w = canvas.width, h = canvas.height;
+            const centerX = w / 2, centerY = h / 2;
             const radius = w * 0.42;
-            const startAngle = degToRad(-225);
-            const endAngle = degToRad(45);
-            const angleRange = endAngle - startAngle;
 
             ctx.clearRect(0, 0, w, h);
             ctx.shadowBlur = 0;
 
-            // внешний ободок (хромированный)
+            // Внешний ободок
             ctx.beginPath();
             ctx.arc(centerX, centerY, radius + 8, 0, Math.PI * 2);
             ctx.strokeStyle = '#bfb8a8';
             ctx.lineWidth = 3;
             ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
-            ctx.strokeStyle = '#d6cfbc';
-            ctx.lineWidth = 1.8;
-            ctx.stroke();
 
-            // ============================================================
-            // 1. РИСКИ И ПОДПИСИ: ЦЕНА ДЕЛЕНИЯ 0.1 АТМ (каждая 0.1 имеет риску)
-            //    Каждые 0.5 - более длинная, каждые 1.0 - с цифрами + жирнее
-            // ============================================================
-            for (let p = MIN_GAUGE; p <= MAX_GAUGE + 0.01; p += 0.1) {
-                let pRounded = Math.round(p * 10) / 10;
-                if (pRounded > MAX_GAUGE) continue;
-                let t = (pRounded - MIN_GAUGE) / (MAX_GAUGE - MIN_GAUGE);
-                let angle = startAngle + t * angleRange;
+            // Шкала (из кеша)
+            drawScale();
 
-                // Определяем тип засечки
-                const isFullAtm = Math.abs(pRounded - Math.round(pRounded)) < 0.01;
-                const isHalfAtm = Math.abs(pRounded * 2 - Math.round(pRounded * 2)) < 0.05 && !isFullAtm;
-
-                let innerR, outerR, lineWidthVal;
-                if (isFullAtm) {
-                    innerR = radius - 18;
-                    outerR = radius + 8;
-                    lineWidthVal = 2.8;
-                } else if (isHalfAtm) {
-                    innerR = radius - 13;
-                    outerR = radius + 5;
-                    lineWidthVal = 2.0;
-                } else {
-                    innerR = radius - 9;
-                    outerR = radius + 2;
-                    lineWidthVal = 1.2;
-                }
-
-                const x1 = centerX + innerR * Math.cos(angle);
-                const y1 = centerY + innerR * Math.sin(angle);
-                const x2 = centerX + outerR * Math.cos(angle);
-                const y2 = centerY + outerR * Math.sin(angle);
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.lineWidth = lineWidthVal;
-                ctx.strokeStyle = '#2f415b';
-                ctx.stroke();
-
-                // подписи для целых значений (0,1,2...8)
-                if (isFullAtm && pRounded >= MIN_GAUGE && pRounded <= MAX_GAUGE) {
-                    let textR = radius - 27;
-                    let xText = centerX + textR * Math.cos(angle);
-                    let yText = centerY + textR * Math.sin(angle);
-                    ctx.font = `600 ${w * 0.048}px "Segoe UI", "Roboto"`;
-                    ctx.fillStyle = '#2c4b67';
-                    ctx.shadowBlur = 0;
-                    ctx.fillText(Math.round(pRounded).toString(), xText - 8, yText + 7);
-                }
-            }
-
-            // Доп. подпись "атм" внизу шкалы
+            // Подпись "атм"
             ctx.font = `500 ${w * 0.045}px "Segoe UI"`;
             ctx.fillStyle = "#2c5a6e";
             ctx.fillText("атм", centerX - 18, centerY + radius * 0.72);
 
-            // вспомогательные индикаторы границ 0 и 8 атм (крупные метки)
-            for (let edge of [0, 8]) {
-                let tEdge = (edge - MIN_GAUGE) / (MAX_GAUGE - MIN_GAUGE);
-                let angleEdge = startAngle + tEdge * angleRange;
-                let r1 = radius - 20;
-                let r2 = radius + 12;
-                let xe1 = centerX + r1 * Math.cos(angleEdge);
-                let ye1 = centerY + r1 * Math.sin(angleEdge);
-                let xe2 = centerX + r2 * Math.cos(angleEdge);
-                let ye2 = centerY + r2 * Math.sin(angleEdge);
-                ctx.beginPath();
-                ctx.moveTo(xe1, ye1);
-                ctx.lineTo(xe2, ye2);
-                ctx.lineWidth = 3.5;
-                ctx.strokeStyle = "#9b7e5f";
-                ctx.stroke();
-            }
+            // Пороги
+            drawThresholdMark(minThreshold, '#d43f34');
+            drawThresholdMark(maxThreshold, '#e68a2e');
 
-            // ============================================================
-            // 2. ОТРИСОВКА ПОРОГОВ (ЖИРНЫЕ ЗАСЕЧКИ)
-            // ============================================================
-            drawHeavyThresholdMark(minPressure, '#d43f34', '#2c1a12', true);
-            drawHeavyThresholdMark(maxPressure, '#e68a2e', '#2c1a12', false);
+            // Стрелка
+            const startRad = degToRad(START_ANGLE);
+            const endRad = degToRad(END_ANGLE);
+            const t = (currentPressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE);
+            const angle = startRad + Math.min(Math.max(t, 0), 1) * (endRad - startRad);
 
-            // ----- СТРЕЛКА (металлическая с хвостовиком) ----
-            let pressureNorm = (currentPressure - MIN_GAUGE) / (MAX_GAUGE - MIN_GAUGE);
-            pressureNorm = Math.min(Math.max(pressureNorm, 0), 1);
-            let anglePointer = startAngle + pressureNorm * angleRange;
-
-            // Включаем тени для объёма стрелки (но не для меток)
             ctx.shadowBlur = 6;
             ctx.shadowColor = "rgba(0,0,0,0.35)";
-            drawMetalPointer(anglePointer, centerX, centerY, radius);
+            drawPointer(angle, centerX, centerY, radius);
             ctx.shadowBlur = 0;
 
-            // центральная ступица (металлическая гайка с бликом)
+            // Центральная ступица
             ctx.fillStyle = "#353c45";
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 13, 0, 2*Math.PI);
+            ctx.arc(centerX, centerY, 13, 0, 2 * Math.PI);
             ctx.fill();
-            ctx.fillStyle = "#5e6b7c";
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 9, 0, 2*Math.PI);
-            ctx.fill();
-            const hubGrad = ctx.createLinearGradient(centerX-5, centerY-5, centerX+5, centerY+5);
+
+            const hubGrad = ctx.createLinearGradient(centerX - 5, centerY - 5, centerX + 5, centerY + 5);
             hubGrad.addColorStop(0, "#a9b2c2");
             hubGrad.addColorStop(1, "#7a8494");
             ctx.fillStyle = hubGrad;
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 6, 0, 2*Math.PI);
+            ctx.arc(centerX, centerY, 9, 0, 2 * Math.PI);
             ctx.fill();
 
-            // маленький винт в центре
             ctx.fillStyle = "#d4dce6";
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 2.8, 0, 2*Math.PI);
-            ctx.fill();
-            ctx.fillStyle = "#2d2f36";
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 1.2, 0, 2*Math.PI);
-            ctx.fill();
-
-            // Блик на стекле (полупрозрачный)
-            ctx.beginPath();
-            ctx.ellipse(centerX - radius*0.2, centerY - radius*0.25, radius*0.22, radius*0.12, 0, 0, Math.PI*2);
-            ctx.fillStyle = "rgba(255, 250, 240, 0.15)";
+            ctx.arc(centerX, centerY, 4, 0, 2 * Math.PI);
             ctx.fill();
         }
 
-        // ---- Обновление интерфейса из переменных ----
-        function updateUIFromVariables() {
-            minSlider.value = minPressure;
-            maxSlider.value = maxPressure;
-            minSpan.innerText = minPressure.toFixed(2);
-            maxSpan.innerText = maxPressure.toFixed(2);
-            currentPressureSpan.innerText = currentPressure.toFixed(2) + " атм";
-            drawGauge();
-        }
-
-        // ---- Синхронизация слайдеров и коррекция ----
-        function syncMinMaxFromSliders() {
-            let newMin = parseFloat(minSlider.value);
-            let newMax = parseFloat(maxSlider.value);
-            if (newMin >= newMax) {
-                if (document.activeElement === minSlider) {
-                    newMin = Math.max(MIN_GAUGE, newMax - 0.08);
-                    minSlider.value = newMin;
-                } else if (document.activeElement === maxSlider) {
-                    newMax = Math.min(MAX_GAUGE, newMin + 0.08);
-                    maxSlider.value = newMax;
-                } else {
-                    if (newMin >= newMax) {
-                        newMin = newMax - 0.08;
-                        if (newMin < MIN_GAUGE) newMin = MIN_GAUGE;
-                        minSlider.value = newMin;
-                    }
-                }
+        // Симуляция давления с requestAnimationFrame (более плавно)
+        function updatePressure(timestamp) {
+            if (!lastTimestamp) {
+                lastTimestamp = timestamp;
+                animationFrameId = requestAnimationFrame(updatePressure);
+                return;
             }
-            minPressure = parseFloat(minSlider.value);
-            maxPressure = parseFloat(maxSlider.value);
-            minSpan.innerText = minPressure.toFixed(2);
-            maxSpan.innerText = maxPressure.toFixed(2);
-            drawGauge();
-        }
 
-        function saveThresholds() {
-            let rawMin = parseFloat(minSlider.value);
-            let rawMax = parseFloat(maxSlider.value);
-            if (rawMin >= rawMax) {
-                rawMin = Math.max(MIN_GAUGE, rawMax - 0.1);
-                minSlider.value = rawMin;
-                rawMax = Math.min(MAX_GAUGE, rawMin + 0.1);
-                maxSlider.value = rawMax;
-            }
-            minPressure = parseFloat(minSlider.value);
-            maxPressure = parseFloat(maxSlider.value);
-            minSpan.innerText = minPressure.toFixed(2);
-            maxSpan.innerText = maxPressure.toFixed(2);
-            drawGauge();
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 1600);
-            console.log(`[IoT] Сохранены уставки: нижний порог=${minPressure.toFixed(2)} атм, верхний порог=${maxPressure.toFixed(2)} атм`);
-        }
+            const delta = Math.min(timestamp - lastTimestamp, 50) / 1000;
+            lastTimestamp = timestamp;
 
-        function simulatePressureChanges() {
-            let step = 0.013;
+            const step = 0.4 * delta; // ~0.4 атм/сек
+
             if (pressureDirection === 1) {
-                currentPressure += step;
-                if (currentPressure >= maxPressure) {
-                    currentPressure = maxPressure;
-                    pressureDirection = -1;
-                }
+                currentPressure = Math.min(currentPressure + step, maxThreshold);
+                if (currentPressure >= maxThreshold) pressureDirection = -1;
             } else {
-                currentPressure -= step;
-                if (currentPressure <= minPressure) {
-                    currentPressure = minPressure;
-                    pressureDirection = 1;
-                }
+                currentPressure = Math.max(currentPressure - step, minThreshold);
+                if (currentPressure <= minThreshold) pressureDirection = 1;
             }
-            if (currentPressure > MAX_GAUGE) currentPressure = MAX_GAUGE;
-            if (currentPressure < MIN_GAUGE) currentPressure = MIN_GAUGE;
-            currentPressureSpan.innerText = currentPressure.toFixed(2) + " атм";
+
+            currentPressure = Math.min(Math.max(currentPressure, MIN_PRESSURE), MAX_PRESSURE);
+            pressureDisplay.innerText = currentPressure.toFixed(2) + " атм";
+            drawGauge();
+
+            animationFrameId = requestAnimationFrame(updatePressure);
+        }
+
+        // Обновление UI
+        function updateUI() {
+            minSlider.value = minThreshold;
+            maxSlider.value = maxThreshold;
+            minSpan.innerText = minThreshold.toFixed(2);
+            maxSpan.innerText = maxThreshold.toFixed(2);
             drawGauge();
         }
 
-        function startSimulation() {
-            if (simulationInterval) clearInterval(simulationInterval);
-            simulationInterval = setInterval(() => {
-                simulatePressureChanges();
-            }, 70);
-        }
-
-        function bindEvents() {
+        // Обработчики событий
+        function initEvents() {
             minSlider.addEventListener('input', () => {
                 let val = parseFloat(minSlider.value);
-                let maxVal = parseFloat(maxSlider.value);
-                if (val >= maxVal) {
-                    val = Math.max(MIN_GAUGE, maxVal - 0.08);
+                if (val >= maxThreshold) {
+                    val = Math.max(MIN_PRESSURE, maxThreshold - 0.08);
                     minSlider.value = val;
                 }
-                minPressure = parseFloat(minSlider.value);
-                minSpan.innerText = minPressure.toFixed(2);
+                minThreshold = val;
+                minSpan.innerText = minThreshold.toFixed(2);
                 drawGauge();
             });
 
             maxSlider.addEventListener('input', () => {
                 let val = parseFloat(maxSlider.value);
-                let minVal = parseFloat(minSlider.value);
-                if (val <= minVal) {
-                    val = Math.min(MAX_GAUGE, minVal + 0.08);
+                if (val <= minThreshold) {
+                    val = Math.min(MAX_PRESSURE, minThreshold + 0.08);
                     maxSlider.value = val;
                 }
-                maxPressure = parseFloat(maxSlider.value);
-                maxSpan.innerText = maxPressure.toFixed(2);
+                maxThreshold = val;
+                maxSpan.innerText = maxThreshold.toFixed(2);
                 drawGauge();
             });
 
             saveBtn.addEventListener('click', () => {
-                let rawMin = parseFloat(minSlider.value);
-                let rawMax = parseFloat(maxSlider.value);
-                if (rawMin >= rawMax) {
-                    rawMin = Math.max(MIN_GAUGE, rawMax - 0.1);
-                    minSlider.value = rawMin;
-                    rawMax = Math.min(MAX_GAUGE, rawMin + 0.1);
-                    maxSlider.value = rawMax;
+                if (minThreshold >= maxThreshold) {
+                    minThreshold = Math.max(MIN_PRESSURE, maxThreshold - 0.1);
+                    maxThreshold = Math.min(MAX_PRESSURE, minThreshold + 0.1);
+                    minSlider.value = minThreshold;
+                    maxSlider.value = maxThreshold;
                 }
-                minPressure = parseFloat(minSlider.value);
-                maxPressure = parseFloat(maxSlider.value);
-                minSpan.innerText = minPressure.toFixed(2);
-                maxSpan.innerText = maxPressure.toFixed(2);
+                minSpan.innerText = minThreshold.toFixed(2);
+                maxSpan.innerText = maxThreshold.toFixed(2);
                 drawGauge();
-                saveThresholds();
+
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 1500);
             });
         }
 
+        // Инициализация
         function init() {
-            resizeAndDraw();
-            bindEvents();
-            minSlider.value = minPressure;
-            maxSlider.value = maxPressure;
-            updateUIFromVariables();
-            startSimulation();
+            canvasWidth = canvas.width;
+            canvasHeight = canvas.height;
+            cachedScale = buildScaleCache();
+            initEvents();
+            updateUI();
+            animationFrameId = requestAnimationFrame(updatePressure);
+
             window.addEventListener('resize', () => {
-                resizeAndDraw();
+                drawGauge();
             });
         }
 
