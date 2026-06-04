@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>IoT Контроллер давления насоса | 0–8 атм</title>
+    <title>IoT Pump controller</title>
     <style>
         * {
             box-sizing: border-box;
@@ -13,8 +13,8 @@
         body {
             margin: 0;
             min-height: 100vh;
-            background: linear-gradient(145deg, #e0e5ec 0%, #cbd0d9 100%);
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(circle at 20% 30%, #121826, #0b0f17);
+            font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, 'Roboto', sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -22,19 +22,22 @@
         }
 
         .dashboard {
-            max-width: 900px;
+            max-width: 920px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.3);
-            backdrop-filter: blur(2px);
-            border-radius: 64px 64px 48px 48px;
-            box-shadow: 0 20px 35px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.6);
-            padding: 24px 20px 35px;
+            background: rgba(18, 22, 30, 0.75);
+            backdrop-filter: blur(8px);
+            border-radius: 72px 72px 56px 56px;
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            padding: 28px 24px 38px;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(71, 85, 105, 0.5);
         }
 
         .gauge-container {
             display: flex;
             justify-content: center;
             margin: 10px 0 15px;
+            filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.5));
         }
 
         canvas {
@@ -42,24 +45,29 @@
             height: auto;
             max-width: 480px;
             aspect-ratio: 1 / 1;
-            background: #fef9ef;
+            background: #131a24;
             border-radius: 50%;
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.7), inset 0 1px 2px rgba(255, 255, 255, 0.1);
             display: block;
+            transition: box-shadow 0.2s;
         }
 
         .pressure-value {
             text-align: center;
-            font-size: 1.9rem;
+            font-size: 2.1rem;
             font-weight: 700;
             margin: -5px auto 20px;
-            color: #1f2a3e;
-            background: rgba(255, 255, 240, 0.75);
-            padding: 6px 28px;
-            border-radius: 60px;
-            backdrop-filter: blur(4px);
+            color: #eef4ff;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(12px);
+            padding: 8px 32px;
+            border-radius: 80px;
             display: inline-block;
             width: auto;
+            letter-spacing: 1px;
+            border: 1px solid rgba(80, 140, 200, 0.4);
+            font-family: 'JetBrains Mono', monospace, 'Segoe UI';
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .value-wrapper {
@@ -67,51 +75,59 @@
         }
 
         .sliders-panel {
-            background: #eef2f7;
+            background: #0e121cb3;
+            backdrop-filter: blur(12px);
             border-radius: 48px;
-            padding: 24px 20px 20px;
-            margin-top: 20px;
-            box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.05), 0 8px 20px rgba(0, 0, 0, 0.1);
+            padding: 28px 24px 24px;
+            margin-top: 24px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 28px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(72, 92, 118, 0.5);
         }
 
         .slider-group {
-            margin-bottom: 28px;
+            margin-bottom: 32px;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .slider-group label {
             display: flex;
             justify-content: space-between;
             font-weight: 600;
-            color: #1e2b3c;
+            color: #e2eafc;
             font-size: 1.2rem;
             margin-bottom: 12px;
+            letter-spacing: 0.3px;
+            text-shadow: 0 1px 1px black;
         }
 
         .slider-group span {
-            background: #2c3e4e;
-            color: white;
-            padding: 4px 14px;
-            border-radius: 30px;
+            background: #1e2f3f;
+            color: #c0e0ff;
+            padding: 4px 16px;
+            border-radius: 40px;
             font-size: 0.9rem;
+            font-weight: 500;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.1);
         }
 
         input[type="range"] {
             width: 100%;
-            height: 8px;
+            height: 6px;
             -webkit-appearance: none;
-            background: linear-gradient(90deg, #2c7da0, #61a5c2);
+            background: linear-gradient(90deg, #1e6f9f, #4aa3cf);
             border-radius: 12px;
             cursor: pointer;
+            box-shadow: inset 0 1px 2px #00000040;
         }
 
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 34px;
-            height: 34px;
-            background: #1f6392;
+            width: 36px;
+            height: 36px;
+            background: radial-gradient(circle, #6db3e0, #2c6c9e);
             border-radius: 50%;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            border: 2px solid white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(210, 230, 250, 0.7);
+            border: 1px solid #b8d0ff;
             cursor: pointer;
             transition: transform 0.08s;
         }
@@ -123,67 +139,81 @@
         .threshold-hint {
             display: flex;
             justify-content: space-between;
-            margin-top: 8px;
-            font-size: 0.75rem;
-            color: #2c3e50;
+            margin-top: 10px;
+            font-size: 0.7rem;
+            color: #94a9c9;
+            font-weight: 500;
         }
 
         .save-btn {
             width: 100%;
-            background: #2b6e4f;
+            background: linear-gradient(95deg, #1f5a3a, #2b7a55);
             border: none;
             padding: 16px;
             font-size: 1.35rem;
             font-weight: bold;
-            color: white;
+            color: #f0faf5;
             border-radius: 60px;
             margin-top: 28px;
             cursor: pointer;
-            box-shadow: 0 6px 0 #1b4d36;
-            transition: transform 0.08s, box-shadow 0.08s;
+            box-shadow: 0 6px 0 #0d3522;
+            transition: transform 0.08s, box-shadow 0.08s, background 0.1s;
+            letter-spacing: 1px;
+            backdrop-filter: blur(2px);
+            font-family: inherit;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .save-btn:active {
             transform: translateY(3px);
-            box-shadow: 0 3px 0 #1b4d36;
+            box-shadow: 0 3px 0 #0d3522;
+            background: linear-gradient(95deg, #154d33, #216a48);
         }
 
         .toast-msg {
             visibility: hidden;
-            background: rgba(30, 47, 60, 0.92);
-            color: #e9f5e9;
+            background: #1f2f3cee;
+            backdrop-filter: blur(20px);
+            color: #c2f0d6;
             text-align: center;
-            border-radius: 40px;
-            padding: 10px 20px;
+            border-radius: 60px;
+            padding: 12px 28px;
             position: fixed;
-            bottom: 30px;
+            bottom: 32px;
             left: 50%;
             transform: translateX(-50%);
             opacity: 0;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s ease, visibility 0s linear 0.2s;
             z-index: 1000;
             pointer-events: none;
             white-space: nowrap;
+            font-weight: 600;
+            border: 1px solid #3c936e;
+            letter-spacing: 0.4px;
+            box-shadow: 0 6px 16px black;
         }
 
         .toast-msg.show {
             visibility: visible;
             opacity: 1;
+            transition: opacity 0.2s ease;
         }
 
         @media (max-width: 550px) {
-            .dashboard { padding: 18px 16px 30px; }
+            .dashboard { padding: 20px 16px 30px; }
             .slider-group label { font-size: 1rem; }
             .save-btn { font-size: 1.2rem; }
-            .pressure-value { font-size: 1.5rem; }
+            .pressure-value { font-size: 1.6rem; }
+            .toast-msg { white-space: nowrap; font-size: 0.85rem; padding: 8px 20px;}
         }
 
         footer {
             text-align: center;
             font-size: 0.7rem;
             margin-top: 22px;
-            color: #2c4359;
-            opacity: 0.75;
+            color: #6f8aae;
+            opacity: 0.7;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -213,17 +243,18 @@
             <input type="range" id="maxSlider" min="0" max="8" step="0.05" value="6.2">
         </div>
 
-        <button class="save-btn" id="saveButton">💾 СОХРАНИТЬ ЗНАЧЕНИЯ</button>
+        <button class="save-btn" id="saveButton">💾 СОХРАНИТЬ УСТАНОВКИ</button>
     </div>
+    <footer>⚡ IoT контроллер давления | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</footer>
 </div>
-<div id="toastMsg" class="toast-msg">✓ Пороги сохранены</div>
+<div id="toastMsg" class="toast-msg">✓ Пороги успешно сохранены</div>
 
 <script>
     (function() {
-        // Константы
+        // ----- ДИАПАЗОН И ГЕОМЕТРИЯ -----
         const MIN_PRESSURE = 0;
         const MAX_PRESSURE = 8;
-        const START_ANGLE = -225; // градусы
+        const START_ANGLE = -225;   // градусы
         const END_ANGLE = 45;
 
         // DOM элементы
@@ -237,22 +268,21 @@
         const saveBtn = document.getElementById('saveButton');
         const toast = document.getElementById('toastMsg');
 
-        // Состояние
+        // --- Состояние прибора (тёмная адаптация) ---
         let minThreshold = 1.4;
         let maxThreshold = 6.2;
         let currentPressure = 2.7;
-        let pressureDirection = 1;
+        let pressureDirection = 1;   // 1 = рост, -1 = падение
         let animationFrameId = null;
         let lastTimestamp = 0;
 
-        // Предрасчет для отрисовки шкалы (кеширование)
         let cachedScale = null;
         let canvasWidth = 500, canvasHeight = 500;
 
-        // Утилиты
+        // --- Утилиты для углов ---
         const degToRad = (deg) => (deg * Math.PI) / 180;
 
-        // Предрасчет всех меток шкалы (оптимизация)
+        // ---- Построение кеша разметки шкалы (адаптирован цвет под тёмную тему) ----
         function buildScaleCache() {
             const cache = [];
             const centerX = canvasWidth / 2;
@@ -263,28 +293,28 @@
             const angleRange = endRad - startRad;
 
             for (let p = MIN_PRESSURE; p <= MAX_PRESSURE + 0.01; p += 0.1) {
-                const pressure = Math.round(p * 10) / 10;
-                if (pressure > MAX_PRESSURE) continue;
+                const pressureVal = Math.round(p * 10) / 10;
+                if (pressureVal > MAX_PRESSURE) continue;
 
-                const t = (pressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE);
+                const t = (pressureVal - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE);
                 const angle = startRad + t * angleRange;
 
-                const isFullAtm = Math.abs(pressure - Math.round(pressure)) < 0.01;
-                const isHalfAtm = !isFullAtm && (Math.abs(pressure * 2 - Math.round(pressure * 2)) < 0.05);
+                const isFullAtm = Math.abs(pressureVal - Math.round(pressureVal)) < 0.01;
+                const isHalfAtm = !isFullAtm && (Math.abs(pressureVal * 2 - Math.round(pressureVal * 2)) < 0.05);
 
                 let innerR, outerR, lineWidth;
                 if (isFullAtm) {
                     innerR = radius - 18;
-                    outerR = radius + 8;
-                    lineWidth = 2.8;
+                    outerR = radius + 9;
+                    lineWidth = 3.2;
                 } else if (isHalfAtm) {
                     innerR = radius - 13;
                     outerR = radius + 5;
-                    lineWidth = 2.0;
+                    lineWidth = 2.2;
                 } else {
                     innerR = radius - 9;
                     outerR = radius + 2;
-                    lineWidth = 1.2;
+                    lineWidth = 1.3;
                 }
 
                 const x1 = centerX + innerR * Math.cos(angle);
@@ -293,37 +323,41 @@
                 const y2 = centerY + outerR * Math.sin(angle);
 
                 cache.push({
-                    pressure,
+                    pressure: pressureVal,
                     isFullAtm,
                     x1, y1, x2, y2,
                     lineWidth,
-                    textX: isFullAtm ? centerX + (radius - 27) * Math.cos(angle) - 8 : null,
-                    textY: isFullAtm ? centerY + (radius - 27) * Math.sin(angle) + 7 : null
+                    textX: isFullAtm ? centerX + (radius - 27) * Math.cos(angle) - 9 : null,
+                    textY: isFullAtm ? centerY + (radius - 27) * Math.sin(angle) + 8 : null
                 });
             }
             return cache;
         }
 
-        // Отрисовка шкалы из кеша
+        // Отрисовка шкалы (тёмные, читаемые метки)
         function drawScale() {
             if (!cachedScale) return;
-
             for (const mark of cachedScale) {
                 ctx.beginPath();
                 ctx.moveTo(mark.x1, mark.y1);
                 ctx.lineTo(mark.x2, mark.y2);
                 ctx.lineWidth = mark.lineWidth;
-                ctx.strokeStyle = '#2f415b';
+                ctx.strokeStyle = '#a0bbdf';
+                ctx.shadowBlur = 0;
                 ctx.stroke();
 
                 if (mark.isFullAtm && mark.textX !== null) {
-                    ctx.font = `600 ${canvasWidth * 0.048}px "Segoe UI"`;
-                    ctx.fillStyle = '#2c4b67';
+                    ctx.font = `600 ${canvasWidth * 0.048}px "Segoe UI", "Inter", system-ui`;
+                    ctx.fillStyle = '#eef2fc';
+                    ctx.shadowBlur = 2;
+                    ctx.shadowColor = "rgba(0,0,0,0.6)";
                     ctx.fillText(Math.round(mark.pressure).toString(), mark.textX, mark.textY);
+                    ctx.shadowBlur = 0;
                 }
             }
         }
 
+        // Отрисовка цветных порогов (яркие акценты)
         function drawThresholdMark(pressure, color) {
             const w = canvas.width, h = canvas.height;
             const centerX = w / 2, centerY = h / 2;
@@ -334,7 +368,7 @@
             const angle = startRad + t * (endRad - startRad);
 
             const innerRad = radius - 18;
-            const outerRad = radius + 22;
+            const outerRad = radius + 24;
             const x1 = centerX + innerRad * Math.cos(angle);
             const y1 = centerY + innerRad * Math.sin(angle);
             const x2 = centerX + outerRad * Math.cos(angle);
@@ -343,27 +377,26 @@
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
-            ctx.lineWidth = 8;
+            ctx.lineWidth = 9;
             ctx.strokeStyle = color;
-            ctx.shadowBlur = 2;
-            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = "rgba(0,0,0,0.6)";
             ctx.stroke();
             ctx.shadowBlur = 0;
         }
 
-        // Отрисовка стрелки (упрощенная и быстрая)
+        // Эффектная стрелка с металлическим отливом и глянцем
         function drawPointer(angle, centerX, centerY, radius) {
-            const mainLength = radius - 20;
-            const tailLength = radius * 0.27;
+            const mainLength = radius - 22;
+            const tailLength = radius * 0.28;
             const dirX = Math.cos(angle);
             const dirY = Math.sin(angle);
             const perpX = -Math.sin(angle);
             const perpY = Math.cos(angle);
 
-            // Тело стрелки
-            const baseDist = 14;
-            const baseWidth = 18;
-            const tipWidth = 4;
+            const baseDist = 16;
+            const baseWidth = 19;
+            const tipWidth = 5;
 
             const baseLeftX = centerX + baseDist * dirX + (baseWidth/2) * perpX;
             const baseLeftY = centerY + baseDist * dirY + (baseWidth/2) * perpY;
@@ -385,27 +418,27 @@
             ctx.closePath();
 
             const metalGrad = ctx.createLinearGradient(
-                centerX + dirX * 10, centerY + dirY * 10,
+                centerX + dirX * 12, centerY + dirY * 12,
                 centerX + dirX * (mainLength - 15), centerY + dirY * (mainLength - 15)
             );
-            metalGrad.addColorStop(0, '#e0e5ec');
-            metalGrad.addColorStop(0.5, '#9aa0ac');
-            metalGrad.addColorStop(1, '#cbd0d9');
+            metalGrad.addColorStop(0, '#cfddee');
+            metalGrad.addColorStop(0.6, '#919db0');
+            metalGrad.addColorStop(1, '#5f6c80');
             ctx.fillStyle = metalGrad;
             ctx.fill();
-            ctx.strokeStyle = '#4f5a66';
-            ctx.lineWidth = 0.8;
+            ctx.strokeStyle = '#2c3d55';
+            ctx.lineWidth = 1.2;
             ctx.stroke();
 
-            // Хвостовик
+            // Хвост (противовес)
             const tailAngle = angle + Math.PI;
             const tailDirX = Math.cos(tailAngle);
             const tailDirY = Math.sin(tailAngle);
             const tailPerpX = -Math.sin(tailAngle);
             const tailPerpY = Math.cos(tailAngle);
 
-            const tailBaseDist = 12;
-            const tailWidth = 12;
+            const tailBaseDist = 13;
+            const tailWidth = 13;
             const tailEndX = centerX + tailLength * tailDirX;
             const tailEndY = centerY + tailLength * tailDirY;
             const tailBaseX = centerX + tailBaseDist * tailDirX;
@@ -425,15 +458,14 @@
             ctx.lineTo(tailEndLeftX, tailEndLeftY);
             ctx.lineTo(tailEndRightX, tailEndRightY);
             ctx.lineTo(tailRightX, tailRightY);
-            ctx.fillStyle = '#8f95a1';
+            ctx.fillStyle = '#6b788e';
             ctx.fill();
             ctx.stroke();
         }
 
-        // Основная отрисовка
+        // Основной рендер манометра – тёмная эстетика
         function drawGauge() {
             if (!ctx) return;
-
             const w = canvas.width, h = canvas.height;
             const centerX = w / 2, centerY = h / 2;
             const radius = w * 0.42;
@@ -441,57 +473,70 @@
             ctx.clearRect(0, 0, w, h);
             ctx.shadowBlur = 0;
 
-            // Внешний ободок
+            // Внешний металлический обод (тёмный хром)
             ctx.beginPath();
-            ctx.arc(centerX, centerY, radius + 8, 0, Math.PI * 2);
-            ctx.strokeStyle = '#bfb8a8';
-            ctx.lineWidth = 3;
+            ctx.arc(centerX, centerY, radius + 10, 0, Math.PI * 2);
+            ctx.strokeStyle = '#3e4b60';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius + 6, 0, Math.PI * 2);
+            ctx.strokeStyle = '#232b37';
+            ctx.lineWidth = 2.5;
             ctx.stroke();
 
-            // Шкала (из кеша)
+            // Внутренний фон (ночной глянец)
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius + 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#0d1420';
+            ctx.fill();
+
+            // Основная шкала
             drawScale();
 
-            // Подпись "атм"
-            ctx.font = `500 ${w * 0.045}px "Segoe UI"`;
-            ctx.fillStyle = "#2c5a6e";
-            ctx.fillText("атм", centerX - 18, centerY + radius * 0.72);
+            // Текст "атм" стилизованный
+            ctx.font = `500 ${w * 0.042}px "Segoe UI"`;
+            ctx.fillStyle = '#b8cfec';
+            ctx.shadowBlur = 2;
+            ctx.fillText("атм", centerX - 18, centerY + radius * 0.69);
+            ctx.fillStyle = '#85a9d0';
+            ctx.font = `300 ${w * 0.028}px monospace`;
+            ctx.shadowBlur = 0;
 
-            // Пороги
-            drawThresholdMark(minThreshold, '#d43f34');
-            drawThresholdMark(maxThreshold, '#e68a2e');
+            // пороговые метки
+            drawThresholdMark(minThreshold, '#f0745c');   // кораллово-красный
+            drawThresholdMark(maxThreshold, '#fbbf24');   // янтарный
 
-            // Стрелка
+            // стрелка
             const startRad = degToRad(START_ANGLE);
             const endRad = degToRad(END_ANGLE);
-            const t = (currentPressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE);
-            const angle = startRad + Math.min(Math.max(t, 0), 1) * (endRad - startRad);
+            const tValue = (currentPressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE);
+            const angle = startRad + Math.min(Math.max(tValue, 0), 1) * (endRad - startRad);
 
-            ctx.shadowBlur = 6;
-            ctx.shadowColor = "rgba(0,0,0,0.35)";
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = "rgba(0,0,0,0.55)";
             drawPointer(angle, centerX, centerY, radius);
             ctx.shadowBlur = 0;
 
-            // Центральная ступица
-            ctx.fillStyle = "#353c45";
+            // центральная ступица (тёмная)
+            ctx.fillStyle = "#202632";
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 13, 0, 2 * Math.PI);
+            ctx.arc(centerX, centerY, 14, 0, 2 * Math.PI);
             ctx.fill();
-
             const hubGrad = ctx.createLinearGradient(centerX - 5, centerY - 5, centerX + 5, centerY + 5);
-            hubGrad.addColorStop(0, "#a9b2c2");
-            hubGrad.addColorStop(1, "#7a8494");
+            hubGrad.addColorStop(0, "#5d6f8a");
+            hubGrad.addColorStop(1, "#2e3b4a");
             ctx.fillStyle = hubGrad;
             ctx.beginPath();
             ctx.arc(centerX, centerY, 9, 0, 2 * Math.PI);
             ctx.fill();
-
-            ctx.fillStyle = "#d4dce6";
+            ctx.fillStyle = "#bac8dc";
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 4, 0, 2 * Math.PI);
+            ctx.arc(centerX, centerY, 4.2, 0, 2 * Math.PI);
             ctx.fill();
         }
 
-        // Симуляция давления с requestAnimationFrame (более плавно)
+        // симуляция давления с сохранением плавности и пределов
         function updatePressure(timestamp) {
             if (!lastTimestamp) {
                 lastTimestamp = timestamp;
@@ -499,10 +544,9 @@
                 return;
             }
 
-            const delta = Math.min(timestamp - lastTimestamp, 50) / 1000;
+            const delta = Math.min(timestamp - lastTimestamp, 45) / 1000;
             lastTimestamp = timestamp;
-
-            const step = 0.4 * delta; // ~0.4 атм/сек
+            const step = 0.42 * delta;  // скорость ~0.42 атм/сек
 
             if (pressureDirection === 1) {
                 currentPressure = Math.min(currentPressure + step, maxThreshold);
@@ -515,11 +559,9 @@
             currentPressure = Math.min(Math.max(currentPressure, MIN_PRESSURE), MAX_PRESSURE);
             pressureDisplay.innerText = currentPressure.toFixed(2) + " атм";
             drawGauge();
-
             animationFrameId = requestAnimationFrame(updatePressure);
         }
 
-        // Обновление UI
         function updateUI() {
             minSlider.value = minThreshold;
             maxSlider.value = maxThreshold;
@@ -528,7 +570,7 @@
             drawGauge();
         }
 
-        // Обработчики событий
+        // инициализация событий
         function initEvents() {
             minSlider.addEventListener('input', () => {
                 let val = parseFloat(minSlider.value);
@@ -553,22 +595,32 @@
             });
 
             saveBtn.addEventListener('click', () => {
+                let corrected = false;
                 if (minThreshold >= maxThreshold) {
-                    minThreshold = Math.max(MIN_PRESSURE, maxThreshold - 0.1);
-                    maxThreshold = Math.min(MAX_PRESSURE, minThreshold + 0.1);
+                    minThreshold = Math.max(MIN_PRESSURE, maxThreshold - 0.12);
+                    maxThreshold = Math.min(MAX_PRESSURE, minThreshold + 0.12);
                     minSlider.value = minThreshold;
                     maxSlider.value = maxThreshold;
+                    corrected = true;
                 }
                 minSpan.innerText = minThreshold.toFixed(2);
                 maxSpan.innerText = maxThreshold.toFixed(2);
                 drawGauge();
 
                 toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 1500);
+                setTimeout(() => toast.classList.remove('show'), 1600);
+                if (corrected) {
+                    // дополнительное уведомление о корректировке через тост, но уже показываем общий
+                    toast.innerText = "✓ Корректные пороги сохранены";
+                    setTimeout(() => { toast.innerText = "✓ Пороги успешно сохранены"; }, 1500);
+                } else {
+                    toast.innerText = "✓ Пороги сохранены";
+                    setTimeout(() => { toast.innerText = "✓ Пороги успешно сохранены"; }, 1400);
+                }
             });
         }
 
-        // Инициализация
+        // инициализация
         function init() {
             canvasWidth = canvas.width;
             canvasHeight = canvas.height;
