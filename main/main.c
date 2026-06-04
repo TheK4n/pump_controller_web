@@ -20,6 +20,7 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+#include "frontend.h"
 
 // ==================== НАСТРОЙКИ ТОЧКИ ДОСТУПА ====================
 #define AP_SSID             "ESP32_Hotspot"        // Имя Wi-Fi сети
@@ -256,7 +257,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         "</html>";
 
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, (const char*)assets_index_html, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 

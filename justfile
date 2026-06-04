@@ -12,7 +12,8 @@ init:
 build:
     #!/bin/sh
     . "{{ESPRESSIF}}/export.sh"
-    idf.py
+    xxd -i assets/index.html > main/frontend.h
+    idf.py build
 
 
 upload:
