@@ -21,6 +21,7 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "frontend.h"
+#include <cJSON.h>
 
 // ==================== НАСТРОЙКИ ТОЧКИ ДОСТУПА ====================
 #define AP_SSID             "ESP32_Hotspot"        // Имя Wi-Fi сети
@@ -28,6 +29,7 @@
 #define AP_MAX_CONN         4                      // Максимум клиентов
 #define AP_CHANNEL          6                      // Wi-Fi канал
 
+#define PUMP_PIN 2
 
 #define ADC_CHAN0          ADC_CHANNEL_4
 #define ADC_CHAN1          ADC_CHANNEL_5
@@ -36,6 +38,11 @@
 static adc_oneshot_unit_handle_t adc_handle;
 static adc_cali_handle_t cali_handle;
 static bool is_calibrated = false;
+
+static int g_threshold_low = 0;
+static int g_threshold_up = 0;
+
+static int g_current_pressure = 0;
 
 
 // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
@@ -80,6 +87,17 @@ esp_err_t adc_init(void)
     return ESP_OK;
 }
 
+static void pump_init(void) {
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << PUMP_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_down_en = 1,
+        .pull_up_en = 0,
+    };
+    gpio_config(&io_conf);
+}
+
 int adc_read_raw(uint8_t channel)
 {
     int raw_value = 0;
@@ -102,8 +120,7 @@ int adc_read_raw(uint8_t channel)
     return raw_value;
 }
 
-int adc_read_voltage(uint8_t channel)
-{
+int adc_read_voltage(uint8_t channel) {
     int raw_value = adc_read_raw(channel);
     if (raw_value < 0) return -1;
 
@@ -122,11 +139,7 @@ int adc_read_voltage(uint8_t channel)
 }
 
 
-// ==================== ОБРАБОТЧИКИ HTTP ЗАПРОСОВ ====================
-
-// Обработчик главной страницы
-static esp_err_t root_get_handler(httpd_req_t *req)
-{
+static esp_err_t root_get_handler(httpd_req_t *req) {
     const char* response =
         "<!DOCTYPE html>"
         "<html>"
@@ -261,47 +274,11 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// Управление GPIO
-static esp_err_t gpio_handler(httpd_req_t *req)
-{
-    char param[10];
-    char state_str[10];
-
-    // Получаем параметр state из URL
-    if (httpd_req_get_url_query_str(req, param, sizeof(param)) == ESP_OK) {
-        if (httpd_query_key_value(param, "state", state_str, sizeof(state_str)) == ESP_OK) {
-            int state = atoi(state_str);
-
-            // Настройка GPIO2 (встроенный LED на многих ESP32)
-            gpio_config_t io_conf = {
-                .pin_bit_mask = (1ULL << 2),
-                .mode = GPIO_MODE_OUTPUT,
-                .intr_type = GPIO_INTR_DISABLE,
-                .pull_down_en = 0,
-                .pull_up_en = 0,
-            };
-            gpio_config(&io_conf);
-            gpio_set_level(2, state);
-
-            char response[100];
-            snprintf(response, sizeof(response), "{\"status\":\"%s\"}", state ? "on" : "off");
-            httpd_resp_set_type(req, "application/json");
-            httpd_resp_send(req, response, strlen(response));
-            return ESP_OK;
-        }
-    }
-
-    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing state parameter");
-    return ESP_FAIL;
-}
-
-// Имитация датчика
-static esp_err_t sensor_handler(httpd_req_t *req) {
-    int volt0 = adc_read_voltage(0);
-    int sensor_value = volt0;
+static esp_err_t current_pressure_handler(httpd_req_t *req) {
+    int sensor_value = g_current_pressure;
     char response[100];
     snprintf(response, sizeof(response),
-             "{\"value\":%d,\"message\":\"Случайное значение датчика\"}",
+             "{\"value\":%d}",
              sensor_value);
 
     httpd_resp_set_type(req, "application/json");
@@ -309,23 +286,189 @@ static esp_err_t sensor_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-// Статистика системы
-static esp_err_t stats_handler(httpd_req_t *req)
-{
-    char response[200];
-    snprintf(response, sizeof(response),
-             "{\"free_heap\":%lu,\"uptime\":%d}",
-             esp_get_free_heap_size(),
-             (int)(xTaskGetTickCount() * portTICK_PERIOD_MS / 1000));
+static esp_err_t save_thresholds_handler(httpd_req_t *req) {
+    char response[100];
+    char *content = NULL;
+    size_t content_len = req->content_len;
+
+    // Проверка длины содержимого
+    if (content_len > 512) { // Ограничение размера для безопасности
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+        return ESP_FAIL;
+    }
+
+    // Выделение памяти под содержимое запроса
+    content = malloc(content_len + 1);
+    if (!content) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
+        return ESP_FAIL;
+    }
+
+    // Чтение тела запроса
+    int ret = httpd_req_recv(req, content, content_len);
+    if (ret <= 0) {
+        free(content);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive data");
+        return ESP_FAIL;
+    }
+    content[content_len] = '\0'; // Null-terminator
+
+    // Парсинг JSON
+    cJSON *json = cJSON_Parse(content);
+    free(content);
+
+    if (!json) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // Извлечение параметров low и up
+    cJSON *low_item = cJSON_GetObjectItem(json, "low");
+    cJSON *up_item = cJSON_GetObjectItem(json, "up");
+
+    int low_value = 0;
+    int up_value = 0;
+    bool valid = true;
+
+    if (cJSON_IsNumber(low_item)) {
+        low_value = low_item->valueint;
+    } else {
+        valid = false;
+    }
+
+    if (cJSON_IsNumber(up_item)) {
+        up_value = up_item->valueint;
+    } else {
+        valid = false;
+    }
+
+    cJSON_Delete(json);
+
+    if (!valid) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'low' or 'up' parameters");
+        return ESP_FAIL;
+    }
+
+    // Проверка значений (опционально)
+    if (low_value >= up_value) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Low value must be less than up value");
+        return ESP_FAIL;
+    }
+
+    nvs_handle_t my_handle;
+    esp_err_t err;
+
+    // 1. Открываем раздел "nvs" и пространство имен "storage" на запись/чтение
+    err = nvs_open("storage", NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("TAG", "Error opening NVS");
+        return 1;
+    }
+
+    err = nvs_set_i32(my_handle, "treshhold_low", low_value);
+    ESP_ERROR_CHECK(err);
+
+    err = nvs_set_i32(my_handle, "treshhold_up", up_value);
+    ESP_ERROR_CHECK(err);
+
+    // 4. Сохраняем изменения во flash
+    err = nvs_commit(my_handle);
+    ESP_ERROR_CHECK(err);
+
+    // 5. Закрываем хендл
+    nvs_close(my_handle);
+
+    // Формирование успешного ответа
+    snprintf(response, sizeof(response), "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, response, strlen(response));
+
     return ESP_OK;
 }
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ТОЧКИ ДОСТУПА ====================
-void wifi_init_softap(void)
-{
+static esp_err_t set_thresholds_handler(httpd_req_t *req) {
+    char response[100];
+    char *content = NULL;
+    size_t content_len = req->content_len;
+
+    // Проверка длины содержимого
+    if (content_len > 512) { // Ограничение размера для безопасности
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+        return ESP_FAIL;
+    }
+
+    // Выделение памяти под содержимое запроса
+    content = malloc(content_len + 1);
+    if (!content) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
+        return ESP_FAIL;
+    }
+
+    // Чтение тела запроса
+    int ret = httpd_req_recv(req, content, content_len);
+    if (ret <= 0) {
+        free(content);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive data");
+        return ESP_FAIL;
+    }
+    content[content_len] = '\0'; // Null-terminator
+
+    // Парсинг JSON
+    cJSON *json = cJSON_Parse(content);
+    free(content);
+
+    if (!json) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // Извлечение параметров low и up
+    cJSON *low_item = cJSON_GetObjectItem(json, "low");
+    cJSON *up_item = cJSON_GetObjectItem(json, "up");
+
+    int low_value = 0;
+    int up_value = 0;
+    bool valid = true;
+
+    if (cJSON_IsNumber(low_item)) {
+        low_value = low_item->valueint;
+    } else {
+        valid = false;
+    }
+
+    if (cJSON_IsNumber(up_item)) {
+        up_value = up_item->valueint;
+    } else {
+        valid = false;
+    }
+
+    cJSON_Delete(json);
+
+    if (!valid) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'low' or 'up' parameters");
+        return ESP_FAIL;
+    }
+
+    // Проверка значений (опционально)
+    if (low_value >= up_value) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Low value must be less than up value");
+        return ESP_FAIL;
+    }
+
+    g_threshold_low = low_value;
+    g_threshold_up = up_value;
+
+    // Формирование успешного ответа
+    snprintf(response, sizeof(response), "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, response, strlen(response));
+
+    return ESP_OK;
+}
+
+void wifi_init_softap(void) {
     // Инициализация сетевого интерфейса
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -347,7 +490,6 @@ void wifi_init_softap(void)
         },
     };
 
-    // Если пароль не задан - открытая сеть
     if (strlen(AP_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
@@ -364,56 +506,39 @@ void wifi_init_softap(void)
     ESP_LOGI(TAG, "=========================================");
 }
 
-// void setup_adc() {
-//     // Настройка разрешения (9-12 бит)
-//     adc1_config_width(ADC_WIDTH_BIT_12);
-//
-//     // Настройка аттенюации (диапазон входного напряжения)
-//     adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
-// }
-//
-// int read_mid_pressure(void) {
-//     int N = 5;
-//     int pause = 20;
-//
-//     int sum = 0;
-//     for (int i = 0; i < N; i++) {
-//         sum += adc1_get_raw(ADC1_CHANNEL_0);
-//         vTaskDelay(pdMS_TO_TICKS(pause));
-//     }
-//
-//     return sum /= N;
-// }
+static void disablePump(void) {
+    gpio_set_level(PUMP_PIN, false);
+}
 
-// static void pressure_control_task(void *pvParameters) {
-//     gpio_config_t io_conf = {
-//         .pin_bit_mask = (1ULL << 2),
-//         .mode = GPIO_MODE_OUTPUT,
-//         .intr_type = GPIO_INTR_DISABLE,
-//         .pull_down_en = 1,
-//         .pull_up_en = 0,
-//     };
-//     gpio_config(&io_conf);
-//
-//     while(1) {
-//         int low_treshhold_pressure = atomic_load(&low_treshhold);
-//         int up_treshhold_pressure = atomic_load(&up_treshhold);
-//
-//         int pressure = read_mid_pressure();
-//
-//         if (pressure < low_treshhold_pressure) {
-//             gpio_set_level(2, 1);
-//         } else if (pressure >= up_treshhold_pressure) {
-//             gpio_set_level(2, 0);
-//         }
-//
-//         vTaskDelay(pdMS_TO_TICKS(400));
-//     }
-// }
+static void enablePump(void) {
+    gpio_set_level(PUMP_PIN, true);
+}
 
-// ==================== ЗАДАЧА HTTP СЕРВЕРА ====================
-static void http_server_task(void *pvParameters)
-{
+static void vPumpControllTask(void *pvParameters) {
+    while (1) {
+        int current_pressure = g_current_pressure;
+        int low_treshhold = g_threshold_low;
+        int up_treshhold = g_threshold_up;
+
+        if (current_pressure < low_treshhold) {
+            enablePump();
+        } else if (current_pressure >= up_treshhold) {
+            disablePump();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+static void vReadSensorTask(void *pvParameters) {
+    while (1) {
+        g_current_pressure = adc_read_voltage(0);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+static void vHttpServerTask(void *pvParameters) {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 10;
@@ -432,35 +557,29 @@ static void http_server_task(void *pvParameters)
         };
         httpd_register_uri_handler(server, &root);
 
-        httpd_uri_t gpio = {
-            .uri       = "/gpio",
+        httpd_uri_t pressure = {
+            .uri       = "/pressure",
             .method    = HTTP_GET,
-            .handler   = gpio_handler,
+            .handler   = current_pressure_handler,
             .user_ctx  = NULL
         };
-        httpd_register_uri_handler(server, &gpio);
+        httpd_register_uri_handler(server, &pressure);
 
-        httpd_uri_t sensor = {
-            .uri       = "/sensor",
-            .method    = HTTP_GET,
-            .handler   = sensor_handler,
+        httpd_uri_t set_thresholds = {
+            .uri       = "/thresholds",
+            .method    = HTTP_POST,
+            .handler   = set_thresholds_handler,
             .user_ctx  = NULL
         };
-        httpd_register_uri_handler(server, &sensor);
+        httpd_register_uri_handler(server, &set_thresholds);
 
-        httpd_uri_t stats = {
-            .uri       = "/stats",
-            .method    = HTTP_GET,
-            .handler   = stats_handler,
+        httpd_uri_t save_thresholds = {
+            .uri       = "/persist_thresholds",
+            .method    = HTTP_POST,
+            .handler   = save_thresholds_handler,
             .user_ctx  = NULL
         };
-        httpd_register_uri_handler(server, &stats);
-
-        ESP_LOGI(TAG, "📝 Зарегистрированы обработчики:");
-        ESP_LOGI(TAG, "   - GET /       (главная страница)");
-        ESP_LOGI(TAG, "   - GET /gpio   (управление LED)");
-        ESP_LOGI(TAG, "   - GET /sensor (чтение датчика)");
-        ESP_LOGI(TAG, "   - GET /stats  (статистика)");
+        httpd_register_uri_handler(server, &save_thresholds);
     } else {
         ESP_LOGE(TAG, "❌ Ошибка запуска HTTP сервера");
     }
@@ -470,10 +589,7 @@ static void http_server_task(void *pvParameters)
     }
 }
 
-// ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
-void app_main(void)
-{
-    // Инициализация NVS
+void app_main(void) {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -481,29 +597,50 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    nvs_handle_t my_handle;
+    esp_err_t err;
+    // 1. Открываем раздел "nvs" и пространство имен "storage" на запись/чтение
+    err = nvs_open("storage", NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("TAG", "Error opening NVS");
+    }
+
+    err = nvs_get_i32(my_handle, "treshhold_low", &g_threshold_low);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        g_threshold_low = 0;
+    } else {
+        ESP_ERROR_CHECK(err); // Обработка других ошибок
+    }
+
+    err = nvs_get_i32(my_handle, "treshhold_low", &g_threshold_up);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        g_threshold_up = 1;
+    } else {
+        ESP_ERROR_CHECK(err); // Обработка других ошибок
+    }
+
+
     adc_init();
+    pump_init();
 
     ESP_LOGI(TAG, "=========================================");
     ESP_LOGI(TAG, "ESP32 Точка Доступа + HTTP Сервер");
     ESP_LOGI(TAG, "=========================================");
 
 
-    // Инициализация точки доступа
     wifi_init_softap();
 
-    // Небольшая задержка для стабилизации
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    // Создание задачи HTTP сервера
-    xTaskCreate(http_server_task, "http_server", 8192, NULL, 5, NULL);
+    xTaskCreate(vHttpServerTask, "http_server", 8192, NULL, 5, NULL);
+    xTaskCreate(vPumpControllTask, "pump_controll", 8192, NULL, 5, NULL);
+    xTaskCreate(vReadSensorTask, "read_sensor", 8192, NULL, 5, NULL);
 
-    // Демонстрационная задача для имитации датчика
     ESP_LOGI(TAG, "✅ Система готова к работе");
     ESP_LOGI(TAG, "📱 Подключитесь к Wi-Fi: %s", AP_SSID);
     ESP_LOGI(TAG, "🌐 Откройте браузер: http://192.168.4.1");
 
     while (1) {
-        // Вывод информации о подключенных клиентах каждые 10 секунд
         vTaskDelay(pdMS_TO_TICKS(10000));
 
         wifi_sta_list_t sta_list;
@@ -511,7 +648,6 @@ void app_main(void)
         esp_wifi_ap_get_sta_list(&sta_list);
 
         ESP_LOGI(TAG, "📊 Подключено клиентов: %d", sta_list.num);
-        ESP_LOGI(TAG, "💾 Свободно памяти: %d байт", esp_get_free_heap_size());
     }
 }
 
