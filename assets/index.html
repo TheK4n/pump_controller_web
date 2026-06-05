@@ -554,7 +554,6 @@
                 clearTimeout(saveTimeout);
             }
 
-            // Устанавливаем новый таймаут на 300 мс
             saveTimeout = setTimeout(async () => {
                 try {
                     const response = await fetch('/thresholds', {
@@ -584,7 +583,7 @@
                     toast.classList.add('show');
                     setTimeout(() => toast.classList.remove('show'), 1600);
                 }
-            }, 300);
+            }, 700);
         }
 
         async function saveThresholds() {
