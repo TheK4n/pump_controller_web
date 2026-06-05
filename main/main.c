@@ -1,8 +1,11 @@
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdatomic.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
+#include <freertos/projdefs.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
 #include <driver/gpio.h>
@@ -11,18 +14,15 @@
 #include <nvs_flash.h>
 #include <lwip/err.h>
 #include <lwip/sys.h>
+#include <cJSON.h>
 #include "esp_http_server.h"
-#include <stdio.h>
-#include "freertos/projdefs.h"
-#include "freertos/task.h"
-#include "esp_log.h"
-#include <stdatomic.h>
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
-#include "frontend.h"
-#include <cJSON.h>
+#include "esp_task_wdt.h"
+
 #include "sdkconfig.h"
+#include "frontend.h"
 
 #define AP_MAX_CONN         4
 #define AP_CHANNEL          6
@@ -36,6 +36,13 @@
 #define NVS_PARTITION "nvs"
 
 #define SENSOR_ADC_CHAN 0
+#define MAX_JSON_CONTENT 512
+
+#define FILTER_SAMPLES 5
+
+#define PRIORITY_HTTP     1
+#define PRIORITY_CONTROL  2
+#define PRIORITY_SENSOR   3
 
 static adc_oneshot_unit_handle_t adc_handle;
 static adc_cali_handle_t cali_handle;
@@ -43,23 +50,82 @@ static bool is_calibrated = false;
 
 static atomic_int g_threshold_low = 0;
 static atomic_int g_threshold_up = 0;
-
 static atomic_int g_current_pressure = 0;
 
-#define TAG "Pump Controller"
+static const char TAG[] = "Pump Controller";
+
+static esp_err_t parse_thresholds_json(const char *content, int *low_value, int *up_value) {
+    cJSON *json = cJSON_Parse(content);
+    if (!json) {
+        return ESP_FAIL;
+    }
+
+    cJSON *low_item = cJSON_GetObjectItem(json, "low");
+    cJSON *up_item = cJSON_GetObjectItem(json, "up");
+
+    bool valid = cJSON_IsNumber(low_item) && cJSON_IsNumber(up_item);
+    if (valid) {
+        *low_value = low_item->valueint;
+        *up_value = up_item->valueint;
+    }
+
+    cJSON_Delete(json);
+    return valid ? ESP_OK : ESP_FAIL;
+}
+
+static esp_err_t receive_http_content(httpd_req_t *req, char **content) {
+    size_t content_len = req->content_len;
+
+    if (content_len > MAX_JSON_CONTENT) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+        return ESP_FAIL;
+    }
+
+    *content = malloc(content_len + 1);
+    if (!*content) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
+        return ESP_FAIL;
+    }
+
+    int ret = httpd_req_recv(req, *content, content_len);
+    if (ret <= 0) {
+        free(*content);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive data");
+        return ESP_FAIL;
+    }
+    (*content)[content_len] = '\0';
+
+    return ESP_OK;
+}
+
+static esp_err_t send_json_response(httpd_req_t *req, const char *format, ...) {
+    char response[100];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(response, sizeof(response), format, args);
+    va_end(args);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, response, strlen(response));
+    return ESP_OK;
+}
 
 esp_err_t adc_init(void) {
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = ADC_UNIT_1,
     };
-    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc_handle));
+    esp_err_t ret = adc_oneshot_new_unit(&init_config, &adc_handle);
+    if (ret != ESP_OK) return ret;
 
     adc_oneshot_chan_cfg_t config = {
         .atten = ADC_ATTEN_DB,
         .bitwidth = ADC_BITWIDTH_DEFAULT,
     };
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ADC_CHAN0, &config));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ADC_CHAN1, &config));
+    ret = adc_oneshot_config_channel(adc_handle, ADC_CHAN0, &config);
+    if (ret != ESP_OK) return ret;
+
+    ret = adc_oneshot_config_channel(adc_handle, ADC_CHAN1, &config);
+    if (ret != ESP_OK) return ret;
 
     adc_cali_line_fitting_config_t cali_config = {
         .unit_id = ADC_UNIT_1,
@@ -67,12 +133,12 @@ esp_err_t adc_init(void) {
         .bitwidth = ADC_BITWIDTH_DEFAULT,
     };
 
-    esp_err_t ret = adc_cali_create_scheme_line_fitting(&cali_config, &cali_handle);
+    ret = adc_cali_create_scheme_line_fitting(&cali_config, &cali_handle);
     if (ret == ESP_OK) {
         is_calibrated = true;
         ESP_LOGI(TAG, "ADC success calibration");
     } else if (ret == ESP_ERR_NOT_SUPPORTED) {
-        ESP_LOGW(TAG, "Calibrating not avalaible (eFuse doesnt written)");
+        ESP_LOGW(TAG, "Calibrating not available (eFuse doesn't written)");
     } else {
         ESP_LOGE(TAG, "Error calibrating");
     }
@@ -89,6 +155,7 @@ static void pump_init(void) {
         .pull_up_en = 0,
     };
     gpio_config(&io_conf);
+    gpio_set_level(CONFIG_PUMP_PIN, false);
 }
 
 int adc_read_raw(uint8_t channel)
@@ -126,11 +193,9 @@ int adc_read_voltage(uint8_t channel) {
         }
         return voltage_mv;
     } else {
-        // Приблизительный расчет без калибровки (12-bit ADC: 0-4095 -> 0-3300mV)
         return (raw_value * 3300) / 4095;
     }
 }
-
 
 static esp_err_t root_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
@@ -140,73 +205,22 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
 
 static esp_err_t current_pressure_handler(httpd_req_t *req) {
     int sensor_value = atomic_load(&g_current_pressure);
-    char response[100];
-    snprintf(response, sizeof(response),
-             "{\"value\":%d}",
-             sensor_value);
-
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response, strlen(response));
-    return ESP_OK;
+    return send_json_response(req, "{\"value\":%d}", sensor_value);
 }
 
 static esp_err_t save_thresholds_handler(httpd_req_t *req) {
-    char response[100];
     char *content = NULL;
-    size_t content_len = req->content_len;
-
-    if (content_len > 512) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+    if (receive_http_content(req, &content) != ESP_OK) {
         return ESP_FAIL;
     }
 
-    content = malloc(content_len + 1);
-    if (!content) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
-        return ESP_FAIL;
-    }
-
-    int ret = httpd_req_recv(req, content, content_len);
-    if (ret <= 0) {
+    int low_value = 0, up_value = 0;
+    if (parse_thresholds_json(content, &low_value, &up_value) != ESP_OK) {
         free(content);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive data");
-        return ESP_FAIL;
-    }
-    content[content_len] = '\0';
-
-    cJSON *json = cJSON_Parse(content);
-    free(content);
-
-    if (!json) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
-    }
-
-    cJSON *low_item = cJSON_GetObjectItem(json, "low");
-    cJSON *up_item = cJSON_GetObjectItem(json, "up");
-
-    int low_value = 0;
-    int up_value = 0;
-    bool valid = true;
-
-    if (cJSON_IsNumber(low_item)) {
-        low_value = low_item->valueint;
-    } else {
-        valid = false;
-    }
-
-    if (cJSON_IsNumber(up_item)) {
-        up_value = up_item->valueint;
-    } else {
-        valid = false;
-    }
-
-    cJSON_Delete(json);
-
-    if (!valid) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'low' or 'up' parameters");
         return ESP_FAIL;
     }
+    free(content);
 
     if (low_value >= up_value) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Low value must be less than up value");
@@ -214,91 +228,46 @@ static esp_err_t save_thresholds_handler(httpd_req_t *req) {
     }
 
     nvs_handle_t my_handle;
-    esp_err_t err;
-
-    err = nvs_open(NVS_PARTITION, NVS_READWRITE, &my_handle);
+    esp_err_t err = nvs_open(NVS_PARTITION, NVS_READWRITE, &my_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error opening NVS");
-        return 1;
+        return ESP_FAIL;
     }
 
     err = nvs_set_i32(my_handle, THRESHOLD_LOW_NVS_NAME, low_value);
-    ESP_ERROR_CHECK(err);
+    if (err != ESP_OK) {
+        nvs_close(my_handle);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to save");
+        return ESP_FAIL;
+    }
 
     err = nvs_set_i32(my_handle, THRESHOLD_UP_NVS_NAME, up_value);
-    ESP_ERROR_CHECK(err);
+    if (err != ESP_OK) {
+        nvs_close(my_handle);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to save");
+        return ESP_FAIL;
+    }
 
     err = nvs_commit(my_handle);
     ESP_ERROR_CHECK(err);
-
     nvs_close(my_handle);
 
-    snprintf(response, sizeof(response), "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
-
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response, strlen(response));
-
-    return ESP_OK;
+    return send_json_response(req, "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 }
 
 static esp_err_t set_thresholds_handler(httpd_req_t *req) {
-    char response[100];
     char *content = NULL;
-    size_t content_len = req->content_len;
-
-    if (content_len > 512) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+    if (receive_http_content(req, &content) != ESP_OK) {
         return ESP_FAIL;
     }
 
-    content = malloc(content_len + 1);
-    if (!content) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
-        return ESP_FAIL;
-    }
-
-    int ret = httpd_req_recv(req, content, content_len);
-    if (ret <= 0) {
+    int low_value = 0, up_value = 0;
+    if (parse_thresholds_json(content, &low_value, &up_value) != ESP_OK) {
         free(content);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive data");
-        return ESP_FAIL;
-    }
-    content[content_len] = '\0'; // Null-terminator
-
-    // Парсинг JSON
-    cJSON *json = cJSON_Parse(content);
-    free(content);
-
-    if (!json) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
-    }
-
-    cJSON *low_item = cJSON_GetObjectItem(json, "low");
-    cJSON *up_item = cJSON_GetObjectItem(json, "up");
-
-    int low_value = 0;
-    int up_value = 0;
-    bool valid = true;
-
-    if (cJSON_IsNumber(low_item)) {
-        low_value = low_item->valueint;
-    } else {
-        valid = false;
-    }
-
-    if (cJSON_IsNumber(up_item)) {
-        up_value = up_item->valueint;
-    } else {
-        valid = false;
-    }
-
-    cJSON_Delete(json);
-
-    if (!valid) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'low' or 'up' parameters");
         return ESP_FAIL;
     }
+    free(content);
 
     if (low_value >= up_value) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Low value must be less than up value");
@@ -308,12 +277,7 @@ static esp_err_t set_thresholds_handler(httpd_req_t *req) {
     atomic_store(&g_threshold_low, low_value);
     atomic_store(&g_threshold_up, up_value);
 
-    snprintf(response, sizeof(response), "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
-
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response, strlen(response));
-
-    return ESP_OK;
+    return send_json_response(req, "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 }
 
 void wifi_init_softap(void) {
@@ -344,115 +308,123 @@ void wifi_init_softap(void) {
     ESP_ERROR_CHECK(esp_wifi_start());
 
     esp_netif_ip_info_t ip_info;
-
     ip_info.ip.addr = ipaddr_addr(CONFIG_AP_IP);
     ip_info.gw.addr = ipaddr_addr(CONFIG_AP_GATEWAY);
     ip_info.netmask.addr = ipaddr_addr(CONFIG_AP_NETMASK);
 
     ESP_ERROR_CHECK(esp_netif_dhcps_stop(ap_netif));
-
     ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip_info));
-
     ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
-
 }
 
-static void disablePump(void) {
+static void pump_disable(void) {
     gpio_set_level(CONFIG_PUMP_PIN, false);
 }
 
-static void enablePump(void) {
+static void pump_enable(void) {
     gpio_set_level(CONFIG_PUMP_PIN, true);
 }
 
 static void vPumpControlTask(void *pvParameters) {
     while (1) {
         int current_pressure = atomic_load(&g_current_pressure);
-        int low_treshhold = atomic_load(&g_threshold_low);
-        int up_treshhold = atomic_load(&g_threshold_up);
+        int low_threshold = atomic_load(&g_threshold_low);
+        int up_threshold = atomic_load(&g_threshold_up);
 
-        if (current_pressure < low_treshhold) {
-            enablePump();
+        if (current_pressure < low_threshold) {
+            pump_enable();
             ESP_LOGI(TAG, "Pump enabled");
-        } else if (current_pressure >= up_treshhold) {
-            disablePump();
+        } else if (current_pressure >= up_threshold) {
+            pump_disable();
             ESP_LOGI(TAG, "Pump disabled");
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
+static int read_pressure_filtered(void) {
+    int sum = 0;
+    for (int i = 0; i < FILTER_SAMPLES; i++) {
+        sum += adc_read_voltage(SENSOR_ADC_CHAN);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return sum / FILTER_SAMPLES;
+}
+
 static void vReadSensorTask(void *pvParameters) {
+    esp_task_wdt_add(NULL);
     while (1) {
-        int pressure = adc_read_voltage(SENSOR_ADC_CHAN);
+        int pressure = read_pressure_filtered();
         atomic_store(&g_current_pressure, pressure);
+
+        esp_task_wdt_reset();
+
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
+static void register_http_handlers(httpd_handle_t server) {
+    httpd_uri_t root = {
+        .uri       = "/",
+        .method    = HTTP_GET,
+        .handler   = root_get_handler,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &root);
+
+    httpd_uri_t pressure = {
+        .uri       = "/pressure",
+        .method    = HTTP_GET,
+        .handler   = current_pressure_handler,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &pressure);
+
+    httpd_uri_t set_thresholds = {
+        .uri       = "/thresholds",
+        .method    = HTTP_POST,
+        .handler   = set_thresholds_handler,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &set_thresholds);
+
+    httpd_uri_t save_thresholds = {
+        .uri       = "/persist_thresholds",
+        .method    = HTTP_POST,
+        .handler   = save_thresholds_handler,
+        .user_ctx  = NULL
+    };
+    httpd_register_uri_handler(server, &save_thresholds);
+}
+
 static void vHttpServerTask(void *pvParameters) {
+    esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = CONFIG_WEBINTERFACE_PORT;
     config.max_uri_handlers = 10;
-    config.stack_size = 8192;
+    config.stack_size = 4096;
 
     if (httpd_start(&server, &config) == ESP_OK) {
         ESP_LOGI(TAG, "🚀 HTTP server run on port %d", config.server_port);
-
-        httpd_uri_t root = {
-            .uri       = "/",
-            .method    = HTTP_GET,
-            .handler   = root_get_handler,
-            .user_ctx  = NULL
-        };
-        httpd_register_uri_handler(server, &root);
-
-        httpd_uri_t pressure = {
-            .uri       = "/pressure",
-            .method    = HTTP_GET,
-            .handler   = current_pressure_handler,
-            .user_ctx  = NULL
-        };
-        httpd_register_uri_handler(server, &pressure);
-
-        httpd_uri_t set_thresholds = {
-            .uri       = "/thresholds",
-            .method    = HTTP_POST,
-            .handler   = set_thresholds_handler,
-            .user_ctx  = NULL
-        };
-        httpd_register_uri_handler(server, &set_thresholds);
-
-        httpd_uri_t save_thresholds = {
-            .uri       = "/persist_thresholds",
-            .method    = HTTP_POST,
-            .handler   = save_thresholds_handler,
-            .user_ctx  = NULL
-        };
-        httpd_register_uri_handler(server, &save_thresholds);
+        register_http_handlers(server);
     } else {
         ESP_LOGE(TAG, "❌Error HTTP server running");
     }
 
     while (1) {
+        esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
-void app_main(void) {
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
+static void load_thresholds_from_nvs(void) {
     nvs_handle_t my_handle;
-    esp_err_t err;
-    err = nvs_open(NVS_PARTITION, NVS_READWRITE, &my_handle);
+    esp_err_t err = nvs_open(NVS_PARTITION, NVS_READWRITE, &my_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Error opening NVS");
+        return;
     }
 
     int32_t threshold_low = 0;
@@ -475,16 +447,39 @@ void app_main(void) {
         ESP_ERROR_CHECK(err);
     }
 
+    nvs_close(my_handle);
+}
 
+void app_main(void) {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 10000,           // 10 секунд таймаут
+        .idle_core_mask = (1 << 0) | (1 << 1), // Мониторинг idle-задач на обоих ядрах
+        .trigger_panic = true           // Паника при таймауте (перезагрузка)
+    };
+    ESP_ERROR_CHECK(esp_task_wdt_init(&twdt_config));
+
+    // Добавляем main задачу
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
+
+
+    load_thresholds_from_nvs();
     adc_init();
     pump_init();
     wifi_init_softap();
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    xTaskCreate(vHttpServerTask, "http_server", 8192, NULL, 5, NULL);
-    xTaskCreate(vPumpControlTask, "pump_controll", 8192, NULL, 5, NULL);
-    xTaskCreate(vReadSensorTask, "read_sensor", 8192, NULL, 5, NULL);
+    xTaskCreate(vReadSensorTask, "read_sensor", 2048, NULL, PRIORITY_SENSOR, NULL);
+    xTaskCreate(vPumpControlTask, "pump_control", 2048, NULL, PRIORITY_CONTROL, NULL);
+    xTaskCreate(vHttpServerTask, "http_server", 4096, NULL, PRIORITY_HTTP, NULL);
 
     ESP_LOGI(TAG, "=========================================");
     ESP_LOGI(TAG, "✅ Ready to work");
@@ -494,7 +489,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "=========================================");
 
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
 
         wifi_sta_list_t sta_list;
         memset(&sta_list, 0, sizeof(sta_list));
