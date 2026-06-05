@@ -517,7 +517,7 @@
                     throw new Error('Failed to fetch pressure');
                 }
                 const data = await response.json();
-                const pressure = typeof data === 'number' ? data : data.value;
+                const pressure = typeof data === 'number' ? data : data.value / 100;
                 if (typeof pressure === 'number' && !isNaN(pressure)) {
                     currentPressure = Math.min(Math.max(pressure, MIN_PRESSURE), MAX_PRESSURE);
                     pressureDisplay.innerText = currentPressure.toFixed(2) + " атм";
@@ -536,8 +536,8 @@
                 }
                 const data = await response.json();
                 if (typeof data.low === 'number' && typeof data.up === 'number') {
-                    minThreshold = Math.min(Math.max(data.low, MIN_PRESSURE), MAX_PRESSURE);
-                    maxThreshold = Math.min(Math.max(data.up, MIN_PRESSURE), MAX_PRESSURE);
+                    minThreshold = Math.min(Math.max(data.low / 100, MIN_PRESSURE), MAX_PRESSURE);
+                    maxThreshold = Math.min(Math.max(data.up / 100, MIN_PRESSURE), MAX_PRESSURE);
                     updateUI();
                 }
             } catch (error) {
@@ -562,8 +562,8 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            low: parseFloat(minThreshold.toFixed(2)),
-                            up: parseFloat(maxThreshold.toFixed(2))
+                            low: parseFloat(minThreshold * 100),
+                            up: parseFloat(maxThreshold * 100)
                         })
                     });
 
@@ -594,8 +594,8 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        low: parseFloat(minThreshold.toFixed(2)),
-                        up: parseFloat(maxThreshold.toFixed(2))
+                        low: parseFloat(minThreshold * 100),
+                        up: parseFloat(maxThreshold * 100)
                     })
                 });
 
@@ -654,7 +654,7 @@
             ctx.font = `500 ${w * 0.042}px "Segoe UI"`;
             ctx.fillStyle = '#b8cfec';
             ctx.shadowBlur = 2;
-            ctx.fillText("атм", centerX - 18, centerY + radius * 0.69);
+            ctx.fillText("atm", centerX - 18, centerY + radius * 0.69);
             ctx.fillStyle = '#85a9d0';
             ctx.font = `300 ${w * 0.028}px monospace`;
             ctx.shadowBlur = 0;

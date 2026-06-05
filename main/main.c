@@ -21,6 +21,7 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_task_wdt.h"
 
+#include "lwip/inet.h"
 #include "sdkconfig.h"
 #include "frontend.h"
 
@@ -280,6 +281,8 @@ static esp_err_t save_thresholds_handler(httpd_req_t *req) {
     atomic_store(&g_threshold_low, low_value);
     atomic_store(&g_threshold_up, up_value);
 
+    ESP_LOGI(TAG, "Thresholds saved: low: %d, up: %d", low_value, up_value);
+
     return send_json_response(req, "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 }
 
@@ -311,6 +314,7 @@ static esp_err_t set_thresholds_handler(httpd_req_t *req) {
 
     atomic_store(&g_threshold_low, low_value);
     atomic_store(&g_threshold_up, up_value);
+    ESP_LOGI(TAG, "Thresholds updated: low: %d, up: %d", low_value, up_value);
 
     return send_json_response(req, "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 }
@@ -343,9 +347,9 @@ void wifi_init_softap(void) {
     ESP_ERROR_CHECK(esp_wifi_start());
 
     esp_netif_ip_info_t ip_info;
-    ip_info.ip.addr = ipaddr_addr(CONFIG_AP_IP);
-    ip_info.gw.addr = ipaddr_addr(CONFIG_AP_GATEWAY);
-    ip_info.netmask.addr = ipaddr_addr(CONFIG_AP_NETMASK);
+    ip_info.ip.addr = inet_addr(CONFIG_AP_IP);
+    ip_info.gw.addr = inet_addr(CONFIG_AP_GATEWAY);
+    ip_info.netmask.addr = inet_addr(CONFIG_AP_NETMASK);
 
     ESP_ERROR_CHECK(esp_netif_dhcps_stop(ap_netif));
     ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip_info));
@@ -362,17 +366,20 @@ static void pump_enable(void) {
 
 static void vPumpControlTask(void *pvParameters) {
     esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+    bool pump_enabled = false;
 
     while (1) {
         int current_pressure = atomic_load(&g_current_pressure);
         int low_threshold = atomic_load(&g_threshold_low);
         int up_threshold = atomic_load(&g_threshold_up);
 
-        if (current_pressure < low_threshold) {
+        if ((current_pressure < low_threshold) && (!pump_enabled)) {
             pump_enable();
+            pump_enabled = true;
             ESP_LOGI(TAG, "Pump enabled");
-        } else if (current_pressure >= up_threshold) {
+        } else if ((current_pressure >= up_threshold) && pump_enabled) {
             pump_disable();
+            pump_enabled = false;
             ESP_LOGI(TAG, "Pump disabled");
         }
 
@@ -382,7 +389,7 @@ static void vPumpControlTask(void *pvParameters) {
     }
 }
 
-static int read_pressure_filtered(void) {
+static int read_voltage_filtered(void) {
     int sum = 0;
     for (int i = 0; i < FILTER_SAMPLES; i++) {
         sum += adc_read_voltage(SENSOR_ADC_CHAN);
@@ -391,12 +398,22 @@ static int read_pressure_filtered(void) {
     return sum / FILTER_SAMPLES;
 }
 
+int map(int x, int in_min, int in_max, int out_min, int out_max) {
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+static int convert_adc_to_pressure_atm(int adc_value) {
+    return map(adc_value, 330, 3145, 0, 1184);
+}
+
 static void vReadSensorTask(void *pvParameters) {
     esp_task_wdt_add(xTaskGetCurrentTaskHandle());
 
     while (1) {
-        int pressure = read_pressure_filtered();
+        int voltage = read_voltage_filtered();
+        int pressure = convert_adc_to_pressure_atm(voltage);
         atomic_store(&g_current_pressure, pressure);
+        ESP_LOGI(TAG, "current pressure %d", pressure);
 
         esp_task_wdt_reset();
 
@@ -516,14 +533,6 @@ void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
-    esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 10000,           // 10 секунд таймаут
-        .idle_core_mask = (1 << 0) | (1 << 1), // Мониторинг idle-задач на обоих ядрах
-        .trigger_panic = true           // Паника при таймауте (перезагрузка)
-    };
-    ESP_ERROR_CHECK(esp_task_wdt_init(&twdt_config));
-
 
     load_thresholds_from_nvs();
     ESP_ERROR_CHECK(adc_init());
