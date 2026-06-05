@@ -39,17 +39,13 @@ static adc_oneshot_unit_handle_t adc_handle;
 static adc_cali_handle_t cali_handle;
 static bool is_calibrated = false;
 
-static int g_threshold_low = 0;
-static int g_threshold_up = 0;
+static atomic_int g_threshold_low = 0;
+static atomic_int g_threshold_up = 0;
 
-static int g_current_pressure = 0;
+static atomic_int g_current_pressure = 0;
 
 
-// ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
 static const char *TAG = "ESP32_AP_SERVER";
-
-atomic_int low_treshhold = 0;
-atomic_int up_treshhold = 0;
 
 esp_err_t adc_init(void)
 {
@@ -365,10 +361,10 @@ static esp_err_t save_thresholds_handler(httpd_req_t *req) {
         return 1;
     }
 
-    err = nvs_set_i32(my_handle, "treshhold_low", low_value);
+    err = nvs_set_i32(my_handle, "threshold_low", low_value);
     ESP_ERROR_CHECK(err);
 
-    err = nvs_set_i32(my_handle, "treshhold_up", up_value);
+    err = nvs_set_i32(my_handle, "threshold_up", up_value);
     ESP_ERROR_CHECK(err);
 
     // 4. Сохраняем изменения во flash
