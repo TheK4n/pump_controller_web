@@ -1,9 +1,8 @@
+# Pump controller ESP32
 
-
-
-
-Сохранение конфига:
+## Сборка и прошивка
 ```sh
-. ~/playground/esp-idf/export.sh
-idf.py save-defconfig
+PORT="/dev/ttyUSB0" \
+ESP_IDF="~/playground/esp-idf/"
+just build flash
 ```
