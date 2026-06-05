@@ -32,6 +32,9 @@
 #define ADC_CHAN1          ADC_CHANNEL_5
 #define ADC_ATTEN_DB       ADC_ATTEN_DB_12
 
+#define THRESHOLD_UP_NVS_NAME "threshold_up"
+#define THRESHOLD_LOW_NVS_NAME "threshold_low"
+
 #define SENSOR_ADC_CHAN 0
 
 static adc_oneshot_unit_handle_t adc_handle;
@@ -360,10 +363,10 @@ static esp_err_t save_thresholds_handler(httpd_req_t *req) {
         return 1;
     }
 
-    err = nvs_set_i32(my_handle, "threshold_low", low_value);
+    err = nvs_set_i32(my_handle, THRESHOLD_LOW_NVS_NAME, low_value);
     ESP_ERROR_CHECK(err);
 
-    err = nvs_set_i32(my_handle, "threshold_up", up_value);
+    err = nvs_set_i32(my_handle, THRESHOLD_UP_NVS_NAME, up_value);
     ESP_ERROR_CHECK(err);
 
     // 4. Сохраняем изменения во flash
@@ -613,15 +616,21 @@ void app_main(void) {
         ESP_LOGE("TAG", "Error opening NVS");
     }
 
-    err = nvs_get_i32(my_handle, "treshhold_low", atomic_load(&g_threshold_low));
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
+    int32_t threshold_up, threshold_low = 0;
+
+    err = nvs_get_i32(my_handle, THRESHOLD_LOW_NVS_NAME, &threshold_low);
+    if (err == ESP_OK) {
+        atomic_store(&g_threshold_low, threshold_low);
+    } else if (err == ESP_ERR_NVS_NOT_FOUND) {
         atomic_store(&g_threshold_low, 100);
     } else {
         ESP_ERROR_CHECK(err);
     }
 
-    err = nvs_get_i32(my_handle, "treshhold_low", atomic_load(&g_threshold_up));
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
+    err = nvs_get_i32(my_handle, THRESHOLD_UP_NVS_NAME, &threshold_up);
+    if (err == ESP_OK) {
+        atomic_store(&g_threshold_up, threshold_up);
+    } else if (err == ESP_ERR_NVS_NOT_FOUND) {
         atomic_store(&g_threshold_up, 300);
     } else {
         ESP_ERROR_CHECK(err);
