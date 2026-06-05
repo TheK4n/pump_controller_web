@@ -318,13 +318,10 @@
         const saveBtn = document.getElementById('saveButton');
         const toast = document.getElementById('toastMsg');
 
-        // --- Состояние прибора (тёмная адаптация) ---
         let minThreshold = 1.4;
         let maxThreshold = 6.2;
-        let currentPressure = 2.7;
-        let pressureDirection = 1;   // 1 = рост, -1 = падение
-        let animationFrameId = null;
-        let lastTimestamp = 0;
+        let currentPressure = 0;
+        let pollingInterval = null;
 
         let cachedScale = null;
         let canvasWidth = 500, canvasHeight = 500;
@@ -513,7 +510,117 @@
             ctx.stroke();
         }
 
-        // Основной рендер манометра – тёмная эстетика
+        async function fetchPressure() {
+            try {
+                const response = await fetch('/pressure');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch pressure');
+                }
+                const data = await response.json();
+                const pressure = typeof data === 'number' ? data : data.value;
+                if (typeof pressure === 'number' && !isNaN(pressure)) {
+                    currentPressure = Math.min(Math.max(pressure, MIN_PRESSURE), MAX_PRESSURE);
+                    pressureDisplay.innerText = currentPressure.toFixed(2) + " атм";
+                    drawGauge();
+                }
+            } catch (error) {
+                console.error('Error fetching pressure:', error);
+            }
+        }
+
+        async function fetchThresholds() {
+            try {
+                const response = await fetch('/thresholds');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch thresholds');
+                }
+                const data = await response.json();
+                if (typeof data.low === 'number' && typeof data.up === 'number') {
+                    minThreshold = Math.min(Math.max(data.low, MIN_PRESSURE), MAX_PRESSURE);
+                    maxThreshold = Math.min(Math.max(data.up, MIN_PRESSURE), MAX_PRESSURE);
+                    updateUI();
+                }
+            } catch (error) {
+                console.error('Error fetching thresholds:', error);
+            }
+        }
+
+        // Функция для отправки порогов на сервер с debounce
+        let saveTimeout = null;
+
+        function debounceSetThresholds() {
+            // Очищаем предыдущий таймаут
+            if (saveTimeout) {
+                clearTimeout(saveTimeout);
+            }
+
+            // Устанавливаем новый таймаут на 300 мс
+            saveTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch('/thresholds', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            low: parseFloat(minThreshold.toFixed(2)),
+                            up: parseFloat(maxThreshold.toFixed(2))
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to save thresholds');
+                    }
+
+                    console.log('Thresholds saved:', await response.json());
+
+                    // Показываем временный тост
+                    toast.innerText = "✓ Пороги обновлены";
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 1000);
+                } catch (error) {
+                    console.error('Error saving thresholds:', error);
+                    toast.innerText = "✗ Ошибка сохранения";
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 1600);
+                }
+            }, 300);
+        }
+
+        async function saveThresholds() {
+            try {
+                const response = await fetch('/persist_thresholds', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        low: parseFloat(minThreshold.toFixed(2)),
+                        up: parseFloat(maxThreshold.toFixed(2))
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save thresholds');
+                }
+
+                const data = await response.json();
+                console.log('Thresholds saved:', data);
+
+                toast.innerText = "✓ Пороги сохранены";
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 1600);
+
+                // После сохранения обновляем пороги с сервера для синхронизации
+                await fetchThresholds();
+            } catch (error) {
+                console.error('Error saving thresholds:', error);
+                toast.innerText = "✗ Ошибка сохранения порогов";
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 1600);
+            }
+        }
+
         function drawGauge() {
             if (!ctx) return;
             const w = canvas.width, h = canvas.height;
@@ -586,32 +693,6 @@
             ctx.fill();
         }
 
-        // симуляция давления с сохранением плавности и пределов
-        function updatePressure(timestamp) {
-            if (!lastTimestamp) {
-                lastTimestamp = timestamp;
-                animationFrameId = requestAnimationFrame(updatePressure);
-                return;
-            }
-
-            const delta = Math.min(timestamp - lastTimestamp, 45) / 1000;
-            lastTimestamp = timestamp;
-            const step = 0.42 * delta;  // скорость ~0.42 атм/сек
-
-            if (pressureDirection === 1) {
-                currentPressure = Math.min(currentPressure + step, maxThreshold);
-                if (currentPressure >= maxThreshold) pressureDirection = -1;
-            } else {
-                currentPressure = Math.max(currentPressure - step, minThreshold);
-                if (currentPressure <= minThreshold) pressureDirection = 1;
-            }
-
-            currentPressure = Math.min(Math.max(currentPressure, MIN_PRESSURE), MAX_PRESSURE);
-            pressureDisplay.innerText = currentPressure.toFixed(2) + " атм";
-            drawGauge();
-            animationFrameId = requestAnimationFrame(updatePressure);
-        }
-
         function updateUI() {
             minSlider.value = minThreshold;
             maxSlider.value = maxThreshold;
@@ -630,6 +711,8 @@
                 minThreshold = val;
                 minSpan.innerText = minThreshold.toFixed(2);
                 drawGauge();
+
+                debounceSetThresholds();
             });
 
             maxSlider.addEventListener('input', () => {
@@ -641,64 +724,49 @@
                 maxThreshold = val;
                 maxSpan.innerText = maxThreshold.toFixed(2);
                 drawGauge();
+
+                debounceSetThresholds();
             });
 
             saveBtn.addEventListener('click', () => {
-                minSpan.innerText = minThreshold.toFixed(2);
-                maxSpan.innerText = maxThreshold.toFixed(2);
-                drawGauge();
-
-                toast.innerText = "✓ Пороги сохранены";
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 1600);
+                saveThresholds();
             });
         }
 
-        // function controlGPIO(state) {
-        //     fetch('/gpio?state=' + state)
-        //         .then(response => response.json())
-        //         .then(data => {
-        //             const indicator = document.getElementById('ledIndicator');
-        //             if(data.status === 'on') {
-        //                 indicator.className = 'led-status led-on';
-        //             } else {
-        //                 indicator.className = 'led-status led-off';
-        //             }
-        //         });
-        // }
-        // function getSensorData() {
-        //     fetch('/sensor')
-        //         .then(response => response.json())
-        //         .then(data => {
-        //             document.getElementById('sensorData').innerHTML =
-        //                 '📊 Значение: ' + data.value + '<br>' +
-        //                 '📝 Сообщение: ' + data.message;
-        //         });
-        // }
-        // function updateStats() {
-        //     fetch('/stats')
-        //         .then(response => response.json())
-        //         .then(data => {
-        //             document.getElementById('heap').innerText = data.free_heap;
-        //             document.getElementById('uptime').innerText = data.uptime;
-        //         });
-        // }
-        // setInterval(updateStats, 2000);
-        // getSensorData();
+        function startPolling() {
+            // Запускаем опрос давления каждые 500 мс
+            pollingInterval = setInterval(fetchPressure, 500);
+        }
 
+        function stopPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+        }
 
-        function init() {
+        async function init() {
             canvasWidth = canvas.width;
             canvasHeight = canvas.height;
             cachedScale = buildScaleCache();
+
+            // Загружаем начальные данные
+            await fetchThresholds();
+            await fetchPressure();
+
             initEvents();
             updateUI();
-            animationFrameId = requestAnimationFrame(updatePressure);
+            startPolling();
 
             window.addEventListener('resize', () => {
                 drawGauge();
             });
         }
+
+        // Очистка интервала при выгрузке страницы
+        window.addEventListener('beforeunload', () => {
+            stopPolling();
+        });
 
         init();
     })();

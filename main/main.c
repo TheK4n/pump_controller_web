@@ -283,6 +283,13 @@ static esp_err_t save_thresholds_handler(httpd_req_t *req) {
     return send_json_response(req, "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 }
 
+static esp_err_t get_thresholds_handler(httpd_req_t *req) {
+    int low_threshold = atomic_load(&g_threshold_low);
+    int up_threshold = atomic_load(&g_threshold_up);
+
+    return send_json_response(req, "{\"low\":%d,\"up\":%d}", low_threshold, up_threshold);
+}
+
 static esp_err_t set_thresholds_handler(httpd_req_t *req) {
     char *content = NULL;
     if (receive_http_content(req, &content) != ESP_OK) {
@@ -405,7 +412,7 @@ static void register_http_handlers(httpd_handle_t server) {
         .user_ctx  = NULL
     };
     if (httpd_register_uri_handler(server, &root) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register / handler");
+        ESP_LOGE(TAG, "Failed to register GET / handler");
     }
 
     httpd_uri_t pressure = {
@@ -415,7 +422,17 @@ static void register_http_handlers(httpd_handle_t server) {
         .user_ctx  = NULL
     };
     if (httpd_register_uri_handler(server, &pressure) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register / handler");
+        ESP_LOGE(TAG, "Failed to register GET /pressure handler");
+    }
+
+    httpd_uri_t get_thresholds = {
+        .uri       = "/thresholds",
+        .method    = HTTP_GET,
+        .handler   = get_thresholds_handler,
+        .user_ctx  = NULL
+    };
+    if (httpd_register_uri_handler(server, &get_thresholds) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register GET /thresholds handler");
     }
 
     httpd_uri_t set_thresholds = {
@@ -425,7 +442,7 @@ static void register_http_handlers(httpd_handle_t server) {
         .user_ctx  = NULL
     };
     if (httpd_register_uri_handler(server, &set_thresholds) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register / handler");
+        ESP_LOGE(TAG, "Failed to register POST /thresholds handler");
     }
 
     httpd_uri_t save_thresholds = {
@@ -435,7 +452,7 @@ static void register_http_handlers(httpd_handle_t server) {
         .user_ctx  = NULL
     };
     if (httpd_register_uri_handler(server, &save_thresholds) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register / handler");
+        ESP_LOGE(TAG, "Failed to register POST /persist_thresholds handler");
     }
 }
 
