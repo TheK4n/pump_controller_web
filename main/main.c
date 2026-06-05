@@ -20,6 +20,7 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_task_wdt.h"
+#include "mdns.h"
 
 #include "lwip/inet.h"
 #include "sdkconfig.h"
@@ -56,6 +57,8 @@
 #define PRIORITY_HTTP     1
 #define PRIORITY_CONTROL  2
 #define PRIORITY_SENSOR   3
+
+#define MDNS_DOMAIN "pumpctl"
 
 static adc_oneshot_unit_handle_t adc_handle;
 static adc_cali_handle_t cali_handle;
@@ -124,6 +127,20 @@ static esp_err_t send_json_response(httpd_req_t *req, const char *format, ...) {
     return ESP_OK;
 }
 
+esp_err_t start_mdns_service() {
+    esp_err_t err = mdns_init();
+    if (err) {
+        return err;
+    }
+
+    mdns_hostname_set(MDNS_DOMAIN);
+    mdns_instance_name_set("Thek4n PumpController");
+
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+
+    return ESP_OK;
+}
+
 esp_err_t adc_init(void) {
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = ADC_UNIT_1,
@@ -163,7 +180,7 @@ esp_err_t adc_init(void) {
 static esp_err_t pump_init(void) {
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << CONFIG_PUMP_PIN),
-        .mode = GPIO_MODE_OUTPUT,
+        .mode = GPIO_MODE_INPUT_OUTPUT,
         .intr_type = GPIO_INTR_DISABLE,
         .pull_down_en = 1,
         .pull_up_en = 0,
@@ -229,6 +246,12 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
 static esp_err_t current_pressure_handler(httpd_req_t *req) {
     int sensor_value = atomic_load(&g_current_pressure);
     return send_json_response(req, "{\"value\":%d}", sensor_value);
+}
+
+static esp_err_t pump_state_handler(httpd_req_t *req) {
+    int pump_enabled = gpio_get_level(CONFIG_PUMP_PIN);
+
+    return send_json_response(req, "{\"state\":%d}", pump_enabled);
 }
 
 static esp_err_t save_thresholds_handler(httpd_req_t *req) {
@@ -440,6 +463,16 @@ static void register_http_handlers(httpd_handle_t server) {
         ESP_LOGE(TAG, "Failed to register GET /pressure handler");
     }
 
+    httpd_uri_t pump_state = {
+        .uri       = "/state",
+        .method    = HTTP_GET,
+        .handler   = pump_state_handler,
+        .user_ctx  = NULL
+    };
+    if (httpd_register_uri_handler(server, &pump_state) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register GET /state handler");
+    }
+
     httpd_uri_t get_thresholds = {
         .uri       = "/thresholds",
         .method    = HTTP_GET,
@@ -532,10 +565,13 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+
     load_thresholds_from_nvs();
     ESP_ERROR_CHECK(adc_init());
     ESP_ERROR_CHECK(pump_init());
     wifi_init_softap();
+
+    // ESP_ERROR_CHECK(start_mdns_service());
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 

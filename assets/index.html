@@ -257,6 +257,42 @@
             .toast-msg { white-space: nowrap; font-size: 0.85rem; padding: 8px 20px;}
         }
 
+        .pump-state {
+            text-align: center;
+            margin: 0.5rem auto 1.2rem auto;
+            padding: 0.4rem 0.8rem;
+            width: fit-content;
+            border-radius: 20px;
+            background: #33373b;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            color: #959ea6;
+            font-family: monospace;
+            text-transform: uppercase;
+            border: none;
+            transition: 0.15s linear;
+        }
+
+        .pump-state.enabled {
+            background: #00a86b;
+            color: white;
+            text-shadow: 0 0 2px rgba(0,0,0,0.3);
+            animation: pump-glow 1.2s infinite ease;
+        }
+
+        @keyframes pump-glow {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 168, 107, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 6px rgba(0, 168, 107, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 168, 107, 0);
+            }
+        }
+
         footer {
             text-align: center;
             font-size: 0.7rem;
@@ -275,6 +311,8 @@
     <div class="value-wrapper">
         <div class="pressure-value" id="currentPressureDisplay">0.0 атм</div>
     </div>
+    <div class="pump-state" id="currentPumpState"></div>
+
 
     <div class="sliders-panel">
         <div class="slider-group">
@@ -295,7 +333,7 @@
 
         <button class="save-btn" id="saveButton">💾 СОХРАНИТЬ УСТАНОВКИ</button>
     </div>
-    <footer>⚡ IoT контроллер давления | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</footer>
+    <footer>⚡IoT контроллер давления | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</footer>
 </div>
 <div id="toastMsg" class="toast-msg">✓ Пороги успешно сохранены</div>
 
@@ -315,6 +353,7 @@
         const minSpan = document.getElementById('minThresholdVal');
         const maxSpan = document.getElementById('maxThresholdVal');
         const pressureDisplay = document.getElementById('currentPressureDisplay');
+        const currentState = document.getElementById('currentPumpState');
         const saveBtn = document.getElementById('saveButton');
         const toast = document.getElementById('toastMsg');
 
@@ -508,6 +547,22 @@
             ctx.fillStyle = '#6b788e';
             ctx.fill();
             ctx.stroke();
+        }
+
+        async function fetchState() {
+            try {
+                const response = await fetch('/state');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch state');
+                }
+                const data = await response.json();
+                const state = typeof data === 'number' ? data : data.state;
+                if (typeof state === 'number' && !isNaN(state)) {
+                    state === 1 ? currentState.classList.add("enabled") : currentState.classList.remove("enabled");
+                }
+            } catch (error) {
+                console.error('Error fetching state:', error);
+            }
         }
 
         async function fetchPressure() {
@@ -735,6 +790,7 @@
         function startPolling() {
             // Запускаем опрос давления каждые 500 мс
             pollingInterval = setInterval(fetchPressure, 500);
+            pollingInterval = setInterval(fetchState, 500);
         }
 
         function stopPolling() {
