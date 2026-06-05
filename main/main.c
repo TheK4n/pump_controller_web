@@ -24,6 +24,18 @@
 #include "sdkconfig.h"
 #include "frontend.h"
 
+#if !defined(CONFIG_PUMP_PIN)
+#error "CONFIG_PUMP_PIN must be defined in menuconfig"
+#endif
+
+#if !defined(CONFIG_AP_WIFI_SSID)
+#error "CONFIG_AP_WIFI_SSID must be defined in menuconfig"
+#endif
+
+#if !defined(CONFIG_AP_IP) || !defined(CONFIG_AP_GATEWAY) || !defined(CONFIG_AP_NETMASK)
+#error "AP network configuration must be defined in menuconfig"
+#endif
+
 #define AP_MAX_CONN         4
 #define AP_CHANNEL          6
 
@@ -87,11 +99,12 @@ static esp_err_t receive_http_content(httpd_req_t *req, char **content) {
         return ESP_FAIL;
     }
 
-    int ret = httpd_req_recv(req, *content, content_len);
-    if (ret <= 0) {
-        free(*content);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive data");
-        return ESP_FAIL;
+    int ret;
+    int received = 0;
+    while (received < content_len) {
+        ret = httpd_req_recv(req, *content + received, content_len - received);
+        if (ret <= 0) break;
+        received += ret;
     }
     (*content)[content_len] = '\0';
 
@@ -146,7 +159,7 @@ esp_err_t adc_init(void) {
     return ESP_OK;
 }
 
-static void pump_init(void) {
+static esp_err_t pump_init(void) {
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << CONFIG_PUMP_PIN),
         .mode = GPIO_MODE_OUTPUT,
@@ -154,12 +167,16 @@ static void pump_init(void) {
         .pull_down_en = 1,
         .pull_up_en = 0,
     };
-    gpio_config(&io_conf);
+
+    esp_err_t ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) return ret;
+
     gpio_set_level(CONFIG_PUMP_PIN, false);
+
+    return ESP_OK;
 }
 
-int adc_read_raw(uint8_t channel)
-{
+int adc_read_raw(uint8_t channel) {
     int raw_value = 0;
     adc_channel_t adc_channel;
 
@@ -169,6 +186,11 @@ int adc_read_raw(uint8_t channel)
         adc_channel = ADC_CHAN1;
     } else {
         ESP_LOGE(TAG, "Wrong ADC channel: %d", channel);
+        return -1;
+    }
+
+    if (adc_handle == NULL) {
+        ESP_LOGE(TAG, "ADC not initialized");
         return -1;
     }
 
@@ -249,8 +271,14 @@ static esp_err_t save_thresholds_handler(httpd_req_t *req) {
     }
 
     err = nvs_commit(my_handle);
-    ESP_ERROR_CHECK(err);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
+    }
+
     nvs_close(my_handle);
+
+    atomic_store(&g_threshold_low, low_value);
+    atomic_store(&g_threshold_up, up_value);
 
     return send_json_response(req, "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
 }
@@ -326,6 +354,8 @@ static void pump_enable(void) {
 }
 
 static void vPumpControlTask(void *pvParameters) {
+    esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+
     while (1) {
         int current_pressure = atomic_load(&g_current_pressure);
         int low_threshold = atomic_load(&g_threshold_low);
@@ -338,6 +368,9 @@ static void vPumpControlTask(void *pvParameters) {
             pump_disable();
             ESP_LOGI(TAG, "Pump disabled");
         }
+
+        esp_task_wdt_reset();
+
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -352,7 +385,8 @@ static int read_pressure_filtered(void) {
 }
 
 static void vReadSensorTask(void *pvParameters) {
-    esp_task_wdt_add(NULL);
+    esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+
     while (1) {
         int pressure = read_pressure_filtered();
         atomic_store(&g_current_pressure, pressure);
@@ -370,7 +404,9 @@ static void register_http_handlers(httpd_handle_t server) {
         .handler   = root_get_handler,
         .user_ctx  = NULL
     };
-    httpd_register_uri_handler(server, &root);
+    if (httpd_register_uri_handler(server, &root) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register / handler");
+    }
 
     httpd_uri_t pressure = {
         .uri       = "/pressure",
@@ -378,7 +414,9 @@ static void register_http_handlers(httpd_handle_t server) {
         .handler   = current_pressure_handler,
         .user_ctx  = NULL
     };
-    httpd_register_uri_handler(server, &pressure);
+    if (httpd_register_uri_handler(server, &pressure) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register / handler");
+    }
 
     httpd_uri_t set_thresholds = {
         .uri       = "/thresholds",
@@ -386,7 +424,9 @@ static void register_http_handlers(httpd_handle_t server) {
         .handler   = set_thresholds_handler,
         .user_ctx  = NULL
     };
-    httpd_register_uri_handler(server, &set_thresholds);
+    if (httpd_register_uri_handler(server, &set_thresholds) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register / handler");
+    }
 
     httpd_uri_t save_thresholds = {
         .uri       = "/persist_thresholds",
@@ -394,7 +434,9 @@ static void register_http_handlers(httpd_handle_t server) {
         .handler   = save_thresholds_handler,
         .user_ctx  = NULL
     };
-    httpd_register_uri_handler(server, &save_thresholds);
+    if (httpd_register_uri_handler(server, &save_thresholds) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register / handler");
+    }
 }
 
 static void vHttpServerTask(void *pvParameters) {
@@ -465,21 +507,17 @@ void app_main(void) {
     };
     ESP_ERROR_CHECK(esp_task_wdt_init(&twdt_config));
 
-    // Добавляем main задачу
-    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
-
-
 
     load_thresholds_from_nvs();
     adc_init();
-    pump_init();
+    ESP_ERROR_CHECK(pump_init());
     wifi_init_softap();
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     xTaskCreate(vReadSensorTask, "read_sensor", 2048, NULL, PRIORITY_SENSOR, NULL);
     xTaskCreate(vPumpControlTask, "pump_control", 2048, NULL, PRIORITY_CONTROL, NULL);
-    xTaskCreate(vHttpServerTask, "http_server", 4096, NULL, PRIORITY_HTTP, NULL);
+    xTaskCreate(vHttpServerTask, "http_server", 8192, NULL, PRIORITY_HTTP, NULL);
 
     ESP_LOGI(TAG, "=========================================");
     ESP_LOGI(TAG, "✅ Ready to work");
