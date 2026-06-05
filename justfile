@@ -1,7 +1,7 @@
 #!/usr/bin/env -S just --justfile
 
 PORT := env("PORT", "/dev/ttyUSB0")
-ESPRESSIF := env("ESPRESSIF", "${HOME}/playground/espressif")
+ESPRESSIF := env("ESPRESSIF", "${HOME}/playground/esp-idf")
 
 
 init:
@@ -16,13 +16,15 @@ build:
     idf.py build
 
 
+alias flash := upload
 upload:
     #!/bin/sh
     . "{{ESPRESSIF}}/export.sh"
     idf.py -p "{{PORT}}" flash
 
 
-term:
+alias term := monitor
+monitor:
     #!/bin/sh
     . "{{ESPRESSIF}}/export.sh"
     idf.py -p "{{PORT}}" monitor
