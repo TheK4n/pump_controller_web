@@ -32,6 +32,8 @@
 #define ADC_CHAN1          ADC_CHANNEL_5
 #define ADC_ATTEN_DB       ADC_ATTEN_DB_12
 
+#define SENSOR_ADC_CHAN 0
+
 static adc_oneshot_unit_handle_t adc_handle;
 static adc_cali_handle_t cali_handle;
 static bool is_calibrated = false;
@@ -268,7 +270,7 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
 }
 
 static esp_err_t current_pressure_handler(httpd_req_t *req) {
-    int sensor_value = g_current_pressure;
+    int sensor_value = atomic_load(&g_current_pressure);
     char response[100];
     snprintf(response, sizeof(response),
              "{\"value\":%d}",
@@ -449,8 +451,8 @@ static esp_err_t set_thresholds_handler(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
-    g_threshold_low = low_value;
-    g_threshold_up = up_value;
+    atomic_store(&g_threshold_low, low_value);
+    atomic_store(&g_threshold_up, up_value);
 
     // Формирование успешного ответа
     snprintf(response, sizeof(response), "{\"success\":true,\"low\":%d,\"up\":%d}", low_value, up_value);
@@ -522,24 +524,23 @@ static void enablePump(void) {
 
 static void vPumpControllTask(void *pvParameters) {
     while (1) {
-        int current_pressure = g_current_pressure;
-        int low_treshhold = g_threshold_low;
-        int up_treshhold = g_threshold_up;
+        int current_pressure = atomic_load(&g_current_pressure);
+        int low_treshhold = atomic_load(&g_threshold_low);
+        int up_treshhold = atomic_load(&g_threshold_up);
 
         if (current_pressure < low_treshhold) {
             enablePump();
         } else if (current_pressure >= up_treshhold) {
             disablePump();
         }
-
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 static void vReadSensorTask(void *pvParameters) {
     while (1) {
-        g_current_pressure = adc_read_voltage(0);
-
+        int pressure = adc_read_voltage(SENSOR_ADC_CHAN);
+        atomic_store(&g_current_pressure, pressure);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -612,18 +613,18 @@ void app_main(void) {
         ESP_LOGE("TAG", "Error opening NVS");
     }
 
-    err = nvs_get_i32(my_handle, "treshhold_low", &g_threshold_low);
+    err = nvs_get_i32(my_handle, "treshhold_low", atomic_load(&g_threshold_low));
     if (err == ESP_ERR_NVS_NOT_FOUND) {
-        g_threshold_low = 0;
+        atomic_store(&g_threshold_low, 100);
     } else {
-        ESP_ERROR_CHECK(err); // Обработка других ошибок
+        ESP_ERROR_CHECK(err);
     }
 
-    err = nvs_get_i32(my_handle, "treshhold_low", &g_threshold_up);
+    err = nvs_get_i32(my_handle, "treshhold_low", atomic_load(&g_threshold_up));
     if (err == ESP_ERR_NVS_NOT_FOUND) {
-        g_threshold_up = 1;
+        atomic_store(&g_threshold_up, 300);
     } else {
-        ESP_ERROR_CHECK(err); // Обработка других ошибок
+        ESP_ERROR_CHECK(err);
     }
 
 

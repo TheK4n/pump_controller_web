@@ -41,12 +41,5 @@ menu "Pump Controller Configuration"
         default 4
         range 4 33
         help
-            Digital pin for pump control (use 4,5,18,19,21,22,23,25,26,27,32,33).
-
-    config SENSOR_PIN
-        int "Pressure sensor analog pin"
-        default 34
-        range 34 39
-        help
-            Analog pin for pressure sensor.
+            Digital pin for pump control.
 endmenu
