@@ -620,7 +620,6 @@
             drawGauge();
         }
 
-        // инициализация событий
         function initEvents() {
             minSlider.addEventListener('input', () => {
                 let val = parseFloat(minSlider.value);
@@ -655,7 +654,39 @@
             });
         }
 
-        // инициализация
+        // function controlGPIO(state) {
+        //     fetch('/gpio?state=' + state)
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             const indicator = document.getElementById('ledIndicator');
+        //             if(data.status === 'on') {
+        //                 indicator.className = 'led-status led-on';
+        //             } else {
+        //                 indicator.className = 'led-status led-off';
+        //             }
+        //         });
+        // }
+        // function getSensorData() {
+        //     fetch('/sensor')
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             document.getElementById('sensorData').innerHTML =
+        //                 '📊 Значение: ' + data.value + '<br>' +
+        //                 '📝 Сообщение: ' + data.message;
+        //         });
+        // }
+        // function updateStats() {
+        //     fetch('/stats')
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             document.getElementById('heap').innerText = data.free_heap;
+        //             document.getElementById('uptime').innerText = data.uptime;
+        //         });
+        // }
+        // setInterval(updateStats, 2000);
+        // getSensorData();
+
+
         function init() {
             canvasWidth = canvas.width;
             canvasHeight = canvas.height;
