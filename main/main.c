@@ -509,7 +509,7 @@ void app_main(void) {
 
 
     load_thresholds_from_nvs();
-    adc_init();
+    ESP_ERROR_CHECK(adc_init());
     ESP_ERROR_CHECK(pump_init());
     wifi_init_softap();
 
@@ -526,13 +526,5 @@ void app_main(void) {
     ESP_LOGI(TAG, "🌐 Open browser: http://%s:%d", CONFIG_AP_IP, CONFIG_WEBINTERFACE_PORT);
     ESP_LOGI(TAG, "=========================================");
 
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(5000));
-
-        wifi_sta_list_t sta_list;
-        memset(&sta_list, 0, sizeof(sta_list));
-        esp_wifi_ap_get_sta_list(&sta_list);
-
-        ESP_LOGI(TAG, "📊 Wi-Fi Clients connected: %d", sta_list.num);
-    }
+    vTaskDelete(NULL);
 }
