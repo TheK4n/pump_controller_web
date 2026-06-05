@@ -645,28 +645,13 @@
             });
 
             saveBtn.addEventListener('click', () => {
-                let corrected = false;
-                if (minThreshold >= maxThreshold) {
-                    minThreshold = Math.max(MIN_PRESSURE, maxThreshold - 0.12);
-                    maxThreshold = Math.min(MAX_PRESSURE, minThreshold + 0.12);
-                    minSlider.value = minThreshold;
-                    maxSlider.value = maxThreshold;
-                    corrected = true;
-                }
                 minSpan.innerText = minThreshold.toFixed(2);
                 maxSpan.innerText = maxThreshold.toFixed(2);
                 drawGauge();
 
+                toast.innerText = "✓ Пороги сохранены";
                 toast.classList.add('show');
                 setTimeout(() => toast.classList.remove('show'), 1600);
-                if (corrected) {
-                    // дополнительное уведомление о корректировке через тост, но уже показываем общий
-                    toast.innerText = "✓ Корректные пороги сохранены";
-                    // setTimeout(() => { toast.innerText = "✓ Пороги успешно сохранены"; }, 1500);
-                } else {
-                    toast.innerText = "✓ Пороги сохранены";
-                    // setTimeout(() => { toast.innerText = "✓ Пороги успешно сохранены"; }, 1400);
-                }
             });
         }
 
