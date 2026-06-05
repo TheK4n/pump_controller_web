@@ -413,10 +413,8 @@ static void vReadSensorTask(void *pvParameters) {
         int voltage = read_voltage_filtered();
         int pressure = convert_adc_to_pressure_atm(voltage);
         atomic_store(&g_current_pressure, pressure);
-        ESP_LOGI(TAG, "current pressure %d", pressure);
 
         esp_task_wdt_reset();
-
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
