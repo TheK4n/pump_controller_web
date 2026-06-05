@@ -1,0 +1,52 @@
+menu "Pump Controller Configuration"
+    config AP_WIFI_SSID
+        string "AP WiFi SSID"
+        default "ESP32_Hotspot"
+        help
+            Wi-Fi ssid.
+
+    config AP_WIFI_PASS
+        string "AP WiFi Password"
+        default "12345678"
+        help
+            Wi-Fi password.
+
+    config AP_IP
+        string "AP IP Address"
+        default "192.168.4.1"
+        help
+            AP IP address.
+
+    config AP_GATEWAY
+        string "AP Gateway"
+        default "192.168.4.1"
+        help
+            AP Gateway.
+
+    config AP_NETMASK
+        string "AP Netmask"
+        default "255.255.255.0"
+        help
+            AP Netmask.
+
+    config WEBINTERFACE_PORT
+        int "WEB interface port"
+        default 80
+        range 1 65535
+        help
+            WEB interface tcp port.
+
+    config PUMP_PIN
+        int "Pump digital pin"
+        default 4
+        range 4 33
+        help
+            Digital pin for pump control (use 4,5,18,19,21,22,23,25,26,27,32,33).
+
+    config SENSOR_PIN
+        int "Pressure sensor analog pin"
+        default 34
+        range 34 39
+        help
+            Analog pin for pressure sensor.
+endmenu

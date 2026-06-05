@@ -22,14 +22,11 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "frontend.h"
 #include <cJSON.h>
+#include "sdkconfig.h"
 
 // ==================== НАСТРОЙКИ ТОЧКИ ДОСТУПА ====================
-#define AP_SSID             "ESP32_Hotspot"        // Имя Wi-Fi сети
-#define AP_PASS             "12345678"             // Пароль (минимум 8 символов)
 #define AP_MAX_CONN         4                      // Максимум клиентов
 #define AP_CHANNEL          6                      // Wi-Fi канал
-
-#define PUMP_PIN 2
 
 #define ADC_CHAN0          ADC_CHANNEL_4
 #define ADC_CHAN1          ADC_CHANNEL_5
@@ -85,7 +82,7 @@ esp_err_t adc_init(void)
 
 static void pump_init(void) {
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << PUMP_PIN),
+        .pin_bit_mask = (1ULL << CONFIG_PUMP_PIN),
         .mode = GPIO_MODE_OUTPUT,
         .intr_type = GPIO_INTR_DISABLE,
         .pull_down_en = 1,
@@ -468,7 +465,7 @@ void wifi_init_softap(void) {
     // Инициализация сетевого интерфейса
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
 
     // Инициализация Wi-Fi
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -477,16 +474,16 @@ void wifi_init_softap(void) {
     // Настройка точки доступа
     wifi_config_t wifi_config = {
         .ap = {
-            .ssid = AP_SSID,
-            .ssid_len = strlen(AP_SSID),
-            .password = AP_PASS,
+            .ssid = CONFIG_AP_WIFI_SSID,
+            .ssid_len = strlen(CONFIG_AP_WIFI_SSID),
+            .password = CONFIG_AP_WIFI_PASS,
             .max_connection = AP_MAX_CONN,
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
             .channel = AP_CHANNEL,
         },
     };
 
-    if (strlen(AP_PASS) == 0) {
+    if (strlen(CONFIG_AP_WIFI_PASS) == 0) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
@@ -494,20 +491,33 @@ void wifi_init_softap(void) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
+    esp_netif_ip_info_t ip_info;
+
+    ip_info.ip.addr = ipaddr_addr(CONFIG_AP_IP);
+    ip_info.gw.addr = ipaddr_addr(CONFIG_AP_GATEWAY);
+    ip_info.netmask.addr = ipaddr_addr(CONFIG_AP_NETMASK);
+
+    // Останавливаем DHCP сервер, который автоматически запустился
+    ESP_ERROR_CHECK(esp_netif_dhcps_stop(ap_netif));
+
+    // Устанавливаем наши настройки IP
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(ap_netif, &ip_info));
+
+    ESP_ERROR_CHECK(esp_netif_dhcps_start(ap_netif));
+
     ESP_LOGI(TAG, "=========================================");
-    ESP_LOGI(TAG, "📡 Точка доступа запущена");
-    ESP_LOGI(TAG, "📶 Имя сети (SSID): %s", AP_SSID);
-    ESP_LOGI(TAG, "🔑 Пароль: %s", strlen(AP_PASS) ? AP_PASS : "ОТКРЫТАЯ СЕТЬ");
-    ESP_LOGI(TAG, "🌐 IP адрес сервера: 192.168.4.1");
+    ESP_LOGI(TAG, "📶 Wifi name (SSID): %s", CONFIG_AP_WIFI_SSID);
+    ESP_LOGI(TAG, "🔑 Password: %s", strlen(CONFIG_AP_WIFI_PASS) ? CONFIG_AP_WIFI_PASS : "Open network");
+    ESP_LOGI(TAG, "🌐 Webinterface IP address: %s:%s", CONFIG_AP_IP, CONFIG_WEBINTERFACE_PORT);
     ESP_LOGI(TAG, "=========================================");
 }
 
 static void disablePump(void) {
-    gpio_set_level(PUMP_PIN, false);
+    gpio_set_level(CONFIG_PUMP_PIN, false);
 }
 
 static void enablePump(void) {
-    gpio_set_level(PUMP_PIN, true);
+    gpio_set_level(CONFIG_PUMP_PIN, true);
 }
 
 static void vPumpControllTask(void *pvParameters) {
@@ -537,6 +547,7 @@ static void vReadSensorTask(void *pvParameters) {
 static void vHttpServerTask(void *pvParameters) {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = CONFIG_WEBINTERFACE_PORT;
     config.max_uri_handlers = 10;
     config.stack_size = 8192;
 
@@ -633,7 +644,7 @@ void app_main(void) {
     xTaskCreate(vReadSensorTask, "read_sensor", 8192, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "✅ Система готова к работе");
-    ESP_LOGI(TAG, "📱 Подключитесь к Wi-Fi: %s", AP_SSID);
+    ESP_LOGI(TAG, "📱 Подключитесь к Wi-Fi: %s", CONFIG_AP_WIFI_SSID);
     ESP_LOGI(TAG, "🌐 Откройте браузер: http://192.168.4.1");
 
     while (1) {
