@@ -21,10 +21,16 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_task_wdt.h"
 #include "mdns.h"
-
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "freertos/event_groups.h"
 #include "lwip/inet.h"
+
 #include "sdkconfig.h"
 #include "frontend.h"
+#include "setup_frontend.h"
 
 #if !defined(CONFIG_PUMP_PIN)
 #error "CONFIG_PUMP_PIN must be defined in menuconfig"
@@ -59,6 +65,19 @@
 #define PRIORITY_SENSOR   3
 
 #define MDNS_DOMAIN "pumpctl"
+
+#define RESET_BTN_GPIO        GPIO_NUM_15
+#define LED_GPIO             GPIO_NUM_2
+
+#define WIFI_SSID_MAX_LEN    32
+#define WIFI_PASS_MAX_LEN    64
+
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
+
+static EventGroupHandle_t wifi_event_group;
+static int retry_count = 0;
+static const int MAX_RETRY_COUNT = 5;
 
 static adc_oneshot_unit_handle_t adc_handle;
 static adc_cali_handle_t cali_handle;
@@ -526,6 +545,123 @@ static void vHttpServerTask(void *pvParameters) {
     }
 }
 
+static esp_err_t setup_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_send(req, (const char*)assets_setup_html, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+void save_wifi_config(const char *ssid, const char *password) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open(NVS_PARTITION, NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error opening NVS");
+        return;
+    }
+
+    nvs_set_str(nvs_handle, "wifi_ssid", ssid);
+    nvs_set_str(nvs_handle, "wifi_pass", password);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+
+    ESP_LOGI(TAG, "WiFi config saved: SSID=%s", ssid);
+}
+
+
+static esp_err_t parse_wifi_settings_json(const char *content, char *ssid, char *password) {
+    cJSON *json = cJSON_Parse(content);
+    if (!json) {
+        return ESP_FAIL;
+    }
+
+    cJSON *ssid_item = cJSON_GetObjectItem(json, "ssid");
+    cJSON *pass_item = cJSON_GetObjectItem(json, "password");
+
+    if (!ssid_item || !pass_item ||
+        ssid_item->type != cJSON_String ||
+        pass_item->type != cJSON_String) {
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    if (strlen(ssid_item->valuestring) >= WIFI_SSID_MAX_LEN ||
+        strlen(pass_item->valuestring) >= WIFI_PASS_MAX_LEN) {
+        cJSON_Delete(json);
+        return ESP_FAIL;
+    }
+
+    strlcpy(ssid, ssid_item->valuestring, WIFI_SSID_MAX_LEN);
+    strlcpy(password, pass_item->valuestring, WIFI_PASS_MAX_LEN);
+
+    cJSON_Delete(json);
+    return ESP_OK;
+}
+
+static esp_err_t setup_set_settings_handler(httpd_req_t *req) {
+    char *content = NULL;
+    if (receive_http_content(req, &content) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    char ssid[WIFI_SSID_MAX_LEN];
+    char password[WIFI_PASS_MAX_LEN];
+    if (parse_wifi_settings_json(content, ssid, password) != ESP_OK) {
+        free(content);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'ssid' or 'password' parameters");
+        return ESP_FAIL;
+    }
+    free(content);
+
+
+    send_json_response(req, "{\"success\":true}");
+
+    save_wifi_config(ssid, password);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+    return ESP_OK;
+}
+
+static void vSetupHttpServerTask(void *pvParameters) {
+    esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = CONFIG_WEBINTERFACE_PORT;
+    config.max_uri_handlers = 10;
+    config.stack_size = 4096;
+
+    if (httpd_start(&server, &config) != ESP_OK) {
+        ESP_LOGE(TAG, "❌ Error HTTP server running");
+    } else {
+        ESP_LOGI(TAG, "🚀 Setup HTTP server run on port %d", config.server_port);
+
+        httpd_uri_t root = {
+            .uri       = "/",
+            .method    = HTTP_GET,
+            .handler   = setup_get_handler,
+            .user_ctx  = NULL
+        };
+        if (httpd_register_uri_handler(server, &root) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to register GET / handler");
+        }
+
+        httpd_uri_t settings = {
+            .uri       = "/settings",
+            .method    = HTTP_POST,
+            .handler   = setup_set_settings_handler,
+            .user_ctx  = NULL
+        };
+        if (httpd_register_uri_handler(server, &settings) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to register GET /settings handler");
+        }
+    }
+
+    while (1) {
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 static void load_thresholds_from_nvs(void) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open(NVS_PARTITION, NVS_READWRITE, &my_handle);
@@ -557,6 +693,115 @@ static void load_thresholds_from_nvs(void) {
     nvs_close(my_handle);
 }
 
+bool is_wifi_config_exists() {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open(NVS_PARTITION, NVS_READONLY, &nvs_handle);
+    if (err != ESP_OK) {
+        return false;
+    }
+
+    char ssid[WIFI_SSID_MAX_LEN];
+    size_t ssid_len = sizeof(ssid);
+    err = nvs_get_str(nvs_handle, "wifi_ssid", ssid, &ssid_len);
+
+    nvs_close(nvs_handle);
+
+    return (err == ESP_OK);
+}
+
+// Сброс настроек и очистка NVS
+void reset_settings() {
+    ESP_LOGI(TAG, "Resetting settings...");
+
+    // Очищаем NVS
+    nvs_flash_erase();
+    nvs_flash_init();
+
+    ESP_LOGI(TAG, "Settings reset, restarting...");
+    vTaskDelay(pdMS_TO_TICKS(500));
+}
+
+void indicate_led() {
+    for (int i = 0; i < 3; i++) {
+        gpio_set_level(LED_GPIO, 1);
+        vTaskDelay(pdMS_TO_TICKS(200));
+        gpio_set_level(LED_GPIO, 0);
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+
+}
+
+// Обработчик событий WiFi
+static void event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+        ESP_LOGI(TAG, "Attempting to connect to WiFi...");
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (retry_count < MAX_RETRY_COUNT) {
+            esp_wifi_connect();
+            retry_count++;
+            ESP_LOGI(TAG, "Retry connecting (%d/%d)...", retry_count, MAX_RETRY_COUNT);
+        } else {
+            xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
+            ESP_LOGE(TAG, "Failed to connect after %d retries", MAX_RETRY_COUNT);
+
+            esp_restart();
+        }
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        retry_count = 0;
+        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+
+void wifi_connect_sta(const char* ssid, const char* password) {
+    wifi_event_group = xEventGroupCreate();
+
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL);
+    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL);
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = "",
+            .password = "",
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
+        },
+    };
+
+    strcpy((char*)wifi_config.sta.ssid, ssid);
+    strcpy((char*)wifi_config.sta.password, password);
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "WiFi STA started");
+
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+            pdFALSE,
+            pdFALSE,
+            portMAX_DELAY);
+
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "Successfully connected to WiFi!");
+    } else if (bits & WIFI_FAIL_BIT) {
+        ESP_LOGE(TAG, "Failed to connect to WiFi!");
+    }
+}
+
 void app_main(void) {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -565,26 +810,80 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+    vTaskDelay(pdMS_TO_TICKS(50));
 
-    load_thresholds_from_nvs();
-    ESP_ERROR_CHECK(adc_init());
-    ESP_ERROR_CHECK(pump_init());
-    wifi_init_softap();
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << LED_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLUP_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(LED_GPIO, 0);
 
-    // ESP_ERROR_CHECK(start_mdns_service());
+    gpio_config_t btn_conf = {
+        .pin_bit_mask = (1ULL << RESET_BTN_GPIO),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&btn_conf);
 
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreate(vReadSensorTask, "read_sensor", 2048, NULL, PRIORITY_SENSOR, NULL);
-    xTaskCreate(vPumpControlTask, "pump_control", 2048, NULL, PRIORITY_CONTROL, NULL);
-    xTaskCreate(vHttpServerTask, "http_server", 8192, NULL, PRIORITY_HTTP, NULL);
+    if (gpio_get_level(RESET_BTN_GPIO) == 0) {
+        ESP_LOGI(TAG, "RESET button pressed, resetting settings...");
+        reset_settings();
+        indicate_led();
 
-    ESP_LOGI(TAG, "=========================================");
-    ESP_LOGI(TAG, "✅ Ready to work");
-    ESP_LOGI(TAG, "📱 Connect to Wi-Fi: %s", CONFIG_AP_WIFI_SSID);
-    ESP_LOGI(TAG, "🔑 Wi-Fi Password: %s", strlen(CONFIG_AP_WIFI_PASS) ? CONFIG_AP_WIFI_PASS : "Open network");
-    ESP_LOGI(TAG, "🌐 Open browser: http://%s:%d", CONFIG_AP_IP, CONFIG_WEBINTERFACE_PORT);
-    ESP_LOGI(TAG, "=========================================");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+        return;
+    }
+
+    bool should_run_setup_mode = !is_wifi_config_exists();
+    if (should_run_setup_mode) {
+        wifi_init_softap();
+        ESP_LOGI(TAG, "=========================================");
+        ESP_LOGI(TAG, "No WiFi settings found, starting setup mode");
+        ESP_LOGI(TAG, "📱 Connect to Wi-Fi: %s", CONFIG_AP_WIFI_SSID);
+        ESP_LOGI(TAG, "🔑 Wi-Fi Password: %s", strlen(CONFIG_AP_WIFI_PASS) ? CONFIG_AP_WIFI_PASS : "Open network");
+        ESP_LOGI(TAG, "🌐 Open browser: http://%s:%d", CONFIG_AP_IP, CONFIG_WEBINTERFACE_PORT);
+        ESP_LOGI(TAG, "=========================================");
+
+        xTaskCreate(vSetupHttpServerTask, "setup_http_server", 8192, NULL, PRIORITY_HTTP, NULL);
+    } else {
+        ESP_LOGI(TAG, "WiFi settings found, starting normal mode");
+
+        load_thresholds_from_nvs();
+        ESP_ERROR_CHECK(adc_init());
+        ESP_ERROR_CHECK(pump_init());
+
+        nvs_handle_t nvs_handle;
+        nvs_open(NVS_PARTITION, NVS_READONLY, &nvs_handle);
+
+        char ssid[WIFI_SSID_MAX_LEN];
+        char password[WIFI_PASS_MAX_LEN];
+        size_t ssid_len = sizeof(ssid);
+        size_t pass_len = sizeof(password);
+
+        nvs_get_str(nvs_handle, "wifi_ssid", ssid, &ssid_len);
+        nvs_get_str(nvs_handle, "wifi_pass", password, &pass_len);
+        nvs_close(nvs_handle);
+
+        ESP_LOGI(TAG, "Using saved SSID: %s", ssid);
+        wifi_connect_sta(ssid, password);
+
+        ESP_ERROR_CHECK(start_mdns_service());
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        xTaskCreate(vReadSensorTask, "read_sensor", 2048, NULL, PRIORITY_SENSOR, NULL);
+        xTaskCreate(vPumpControlTask, "pump_control", 2048, NULL, PRIORITY_CONTROL, NULL);
+        xTaskCreate(vHttpServerTask, "http_server", 8192, NULL, PRIORITY_HTTP, NULL);
+    }
 
     vTaskDelete(NULL);
 }

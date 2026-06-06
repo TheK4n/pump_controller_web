@@ -14,6 +14,8 @@ build:
     . "{{ESP_IDF}}/export.sh"
     xxd -i assets/index.html > main/frontend.h
     sed -i '1i\static const ' main/frontend.h
+    xxd -i assets/setup.html > main/setup_frontend.h
+    sed -i '1i\static const ' main/setup_frontend.h
     idf.py build
 
 
