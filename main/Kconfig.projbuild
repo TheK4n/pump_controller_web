@@ -1,7 +1,20 @@
 menu "Pump Controller Configuration"
+    config WIFI_AP
+        bool "Work as WIFI AP"
+        default false
+        help
+            Device wont connect to wifi
+
+    config PUMP_PIN
+        int "Pump digital pin"
+        default 4
+        range 4 33
+        help
+            Digital pin for pump control.
+
     config AP_WIFI_SSID
         string "AP WiFi SSID"
-        default "ESP32_Hotspot"
+        default "pumpcontroller"
         help
             Wi-Fi ssid.
 

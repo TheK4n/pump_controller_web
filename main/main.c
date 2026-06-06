@@ -918,6 +918,26 @@ static app_error_t setup_mode_init(void) {
     return ERR_OK;
 }
 
+static app_error_t ap_normal_mode_init() {
+    CHECK_ERROR(wifi_softap_init(), APP_ERR_WIFI_INIT_FAIL);
+
+    CHECK_ERROR(load_thresholds(), APP_ERR_NVS_READ_FAIL);
+    CHECK_ERROR(adc_init(), APP_ERR_ADC_INIT_FAIL);
+    CHECK_ERROR(pump_init(), APP_ERR_PUMP_INIT_FAIL);
+
+    CHECK_ERROR(http_server_start(), APP_ERR_HTTP_SERVER_START_FAIL);
+    CHECK_ERROR(tasks_create(), APP_ERR_TASK_CREATE_FAIL);
+
+    ESP_LOGI(TAG, "=========================================");
+    ESP_LOGI(TAG, "AP normal mode active");
+    ESP_LOGI(TAG, "📱 Connect to Wi-Fi: %s", CONFIG_AP_WIFI_SSID);
+    ESP_LOGI(TAG, "🔑 Password: %s", strlen(CONFIG_AP_WIFI_PASS) ? CONFIG_AP_WIFI_PASS : "Open network");
+    ESP_LOGI(TAG, "🌐 Open browser: http://%s:%d", CONFIG_AP_IP, CONFIG_WEBINTERFACE_PORT);
+    ESP_LOGI(TAG, "=========================================");
+
+    return ERR_OK;
+}
+
 static app_error_t normal_mode_init(void) {
     g_setup_mode = false;
 
@@ -968,6 +988,11 @@ void app_main(void) {
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
+#if CONFIG_WIFI_AP
+    if (ap_normal_mode_init() != APP_ERR_OK) {
+        handle_error(APP_ERR_WIFI_INIT_FAIL);
+    }
+#else // CONFIG_WIFI_AP
     // Check reset button
     if (gpio_get_level(RESET_BTN_GPIO) == 0) {
         ESP_LOGI(TAG, "RESET button pressed, resetting settings...");
@@ -988,6 +1013,6 @@ void app_main(void) {
             handle_error(APP_ERR_WIFI_CONNECT_FAIL);
         }
     }
-
+#endif // CONFIG_WIFI_AP
     vTaskDelete(NULL);
 }
