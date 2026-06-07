@@ -618,6 +618,12 @@ static app_error_t mdns_init_service(void) {
 // HTTP handlers
 // ============================================================================
 
+static esp_err_t favicon_get_handler(httpd_req_t *req) {
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
 static esp_err_t send_json_response(httpd_req_t *req, const char *format, ...) {
     esp_err_t ret = ESP_OK;
     char *response = NULL;
@@ -987,6 +993,7 @@ static app_error_t http_server_start(void) {
 
     httpd_uri_t uris[] = {
         {.uri = "/", .method = HTTP_GET, .handler = root_get_handler},
+        {.uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get_handler},
         {.uri = "/pressure", .method = HTTP_GET, .handler = current_pressure_handler},
         {.uri = "/state", .method = HTTP_GET, .handler = pump_state_handler},
         {.uri = "/thresholds", .method = HTTP_GET, .handler = get_thresholds_handler},
@@ -1015,6 +1022,11 @@ static app_error_t setup_http_server_start(void) {
         .uri = "/", .method = HTTP_GET, .handler = setup_get_handler
     };
     CHECK_ERROR(httpd_register_uri_handler(server, &root), APP_ERR_HTTP_SERVER_START_FAIL);
+
+    httpd_uri_t favicon = {
+        .uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get_handler
+    };
+    CHECK_ERROR(httpd_register_uri_handler(server, &favicon), APP_ERR_HTTP_SERVER_START_FAIL);
 
     httpd_uri_t settings = {
         .uri = "/settings", .method = HTTP_POST, .handler = setup_set_settings_handler
