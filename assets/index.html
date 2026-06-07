@@ -124,6 +124,29 @@
             text-shadow: 0 1px 1px black;
         }
 
+        .threshold-value {
+            background: #1e2f3f;
+            color: #c0e0ff;
+            padding: 3px 14px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.1);
+            display: inline-flex;
+            gap: 4px;
+            align-items: baseline;
+        }
+
+        .threshold-value span:first-child {
+            min-width: 45px;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .threshold-value span:last-child {
+            opacity: 0.8;
+        }
+
         .slider-group span {
             background: #1e2f3f;
             color: #c0e0ff;
@@ -332,7 +355,9 @@
         <div class="slider-group">
             <label>
                 Нижний порог (включение)
-                <span id="minThresholdVal">0.00</span> атм
+                <span class="threshold-value">
+                    <span id="minThresholdVal">0.00</span> атм
+                </span>
             </label>
             <input type="range" class="min-slider" id="minSlider" min="0" max="8" step="0.05" value="0.0">
         </div>
@@ -340,7 +365,9 @@
         <div class="slider-group">
             <label>
                 Верхний порог (выключение)
-                <span id="maxThresholdVal">0.10</span> атм
+                <span class="threshold-value">
+                    <span id="maxThresholdVal">0.10</span> атм
+                </span>
             </label>
             <input type="range" class="max-slider" id="maxSlider" min="0" max="8" step="0.05" value="3.0">
         </div>
