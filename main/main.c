@@ -84,7 +84,7 @@
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
 
-#define DEFAULT_THRESHOLD_LOW   100
+#define DEFAULT_THRESHOLD_LOW   0
 #define DEFAULT_THRESHOLD_UP    300
 
 #define MAX_AP_SCAN_RESULTS 20
@@ -700,7 +700,7 @@ static esp_err_t parse_thresholds_json(const char *content, int *low_value, int 
 
 static esp_err_t root_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    httpd_resp_send(req, (const char*)assets_index_html, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, (const char*)assets_index_html, assets_index_html_len);
     return ESP_OK;
 }
 
@@ -782,7 +782,7 @@ static esp_err_t set_thresholds_handler(httpd_req_t *req) {
 
 static esp_err_t setup_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    httpd_resp_send(req, (const char*)assets_setup_html, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, (const char*)assets_setup_html, assets_setup_html_len);
     return ESP_OK;
 }
 

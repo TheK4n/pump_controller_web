@@ -309,7 +309,7 @@
         <canvas id="manometerCanvas" width="500" height="500"></canvas>
     </div>
     <div class="value-wrapper">
-        <div class="pressure-value" id="currentPressureDisplay">0.0 атм</div>
+        <div class="pressure-value" id="currentPressureDisplay">0.00 атм</div>
     </div>
     <div class="pump-state" id="currentPumpState"></div>
 
@@ -317,17 +317,17 @@
         <div class="slider-group">
             <label>
                 Нижний порог (включение)
-                <span id="minThresholdVal">1.40</span> атм
+                <span id="minThresholdVal">0.00</span> атм
             </label>
-            <input type="range" class="min-slider" id="minSlider" min="0" max="8" step="0.05" value="1.4">
+            <input type="range" class="min-slider" id="minSlider" min="0" max="8" step="0.05" value="0.0">
         </div>
 
         <div class="slider-group">
             <label>
                 Верхний порог (выключение)
-                <span id="maxThresholdVal">6.20</span> атм
+                <span id="maxThresholdVal">0.10</span> атм
             </label>
-            <input type="range" class="max-slider" id="maxSlider" min="0" max="8" step="0.05" value="6.2">
+            <input type="range" class="max-slider" id="maxSlider" min="0" max="8" step="0.05" value="3.0">
         </div>
 
         <button class="save-btn" id="saveButton">💾 СОХРАНИТЬ УСТАНОВКИ</button>

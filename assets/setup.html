@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Wi-Fi Setup</title>
+    <title>Wi-Fi Setup · Controller</title>
     <style>
         * {
             box-sizing: border-box;
@@ -22,7 +22,7 @@
         }
 
         .card {
-            max-width: 500px;
+            max-width: 540px;
             width: 100%;
             background: rgba(18, 22, 30, 0.75);
             backdrop-filter: blur(8px);
@@ -64,11 +64,207 @@
 
         .sub {
             color: #8ba3c2;
-            margin-bottom: 32px;
+            margin-bottom: 28px;
             font-size: 0.85rem;
             border-bottom: 1px dashed #2a3a4a;
             display: inline-block;
             padding-bottom: 6px;
+        }
+
+        /* кастомный дропдаун */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            margin-bottom: 24px;
+        }
+
+        .select-trigger {
+            background: #0e141f;
+            border: 1.5px solid #2a3a4f;
+            border-radius: 60px;
+            padding: 12px 20px;
+            font-size: 0.95rem;
+            color: #eef4ff;
+            font-family: 'Segoe UI', system-ui;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            transition: all 0.2s;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .select-trigger:hover {
+            border-color: #4c7ab3;
+            background: #111a28;
+        }
+
+        .select-trigger.open {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+        }
+
+        .trigger-text {
+            flex: 1;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .trigger-arrow {
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+            color: #8ba3c2;
+        }
+
+        .select-trigger.open .trigger-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* выпадающий список (под кнопкой) */
+        .select-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            background: #0e141fe6;
+            backdrop-filter: blur(12px);
+            border: 1px solid #2e4057;
+            border-radius: 28px;
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            transition: opacity 0.2s ease, visibility 0.2s, transform 0.2s;
+        }
+
+        .select-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-option {
+            padding: 12px 18px;
+            cursor: pointer;
+            transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 1px solid #1f2f3f;
+        }
+
+        .dropdown-option:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-option:hover {
+            background: #1f2f41;
+        }
+
+        .option-ssid {
+            font-weight: 500;
+            color: #eef4ff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+
+        .option-details {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .signal-bars {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            margin-right: 4px;
+        }
+        .bar {
+            width: 3px;
+            background: #6c8db0;
+            border-radius: 2px;
+            transition: all 0.1s;
+        }
+        .bar.active {
+            background: #6bcfb8;
+            box-shadow: 0 0 2px #6bcfb8;
+        }
+        .auth-badge {
+            font-size: 0.65rem;
+            background: #1a2c3c;
+            padding: 3px 8px;
+            border-radius: 30px;
+            color: #b9d6f2;
+            white-space: nowrap;
+        }
+
+        .empty-option {
+            padding: 18px;
+            text-align: center;
+            color: #7e95b5;
+            font-style: italic;
+        }
+
+        .refresh-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .refresh-btn {
+            background: #1a2535;
+            border: 1.5px solid #2e4057;
+            border-radius: 60px;
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+
+        .refresh-btn:hover {
+            background: #253649;
+            border-color: #4c7ab3;
+            transform: scale(0.97);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.94);
+        }
+
+        .refresh-btn svg {
+            width: 24px;
+            height: 24px;
+            stroke: #bdd4ff;
+            transition: transform 0.4s ease;
+        }
+
+        .refresh-btn.rotating svg {
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         .input-group {
@@ -164,6 +360,7 @@
             font-weight: 600;
             border: 1px solid #3c936e;
             box-shadow: 0 6px 16px black;
+            font-size: 0.9rem;
         }
 
         .toast-msg.show {
@@ -171,19 +368,35 @@
             opacity: 1;
         }
 
-        @media (max-width: 500px) {
+        @media (max-width: 550px) {
             .card { padding: 24px 20px 32px; }
             h1 { font-size: 1.5rem; }
             .save-btn { font-size: 1.2rem; }
+            .refresh-btn { width: 46px; height: 46px; }
+            .toast-msg { white-space: normal; max-width: 85vw; text-align: center; }
+            .option-ssid { max-width: 140px; }
         }
 
         footer {
             text-align: center;
             font-size: 0.7rem;
-            margin-top: 22px;
+            margin-top: 26px;
             color: #6f8aae;
             opacity: 0.7;
             font-weight: 500;
+        }
+
+        /* скролл для dropdown */
+        .select-dropdown::-webkit-scrollbar {
+            width: 5px;
+        }
+        .select-dropdown::-webkit-scrollbar-track {
+            background: #1f2f3f;
+            border-radius: 10px;
+        }
+        .select-dropdown::-webkit-scrollbar-thumb {
+            background: #4c7ab3;
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -198,7 +411,33 @@
         </svg>
     </div>
     <h1>Wi-Fi Connection</h1>
-    <div class="sub">Enter wifi ssid and password to connect device to local network</div>
+    <div class="sub">Select network or enter manually</div>
+
+    <!-- кастомный дропдаун + кнопка обновления -->
+    <div class="refresh-row">
+        <div class="custom-select" id="customSelectContainer">
+            <div class="select-trigger" id="selectTrigger">
+                <div class="trigger-text" id="triggerText">
+                    <span>🔍 Select Wi-Fi network</span>
+                </div>
+                <div class="trigger-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="select-dropdown" id="selectDropdown">
+                <div class="empty-option">Loading networks...</div>
+            </div>
+        </div>
+        <div class="refresh-btn" id="refreshWifiBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+        </div>
+    </div>
 
     <div class="input-group">
         <label>
@@ -209,7 +448,7 @@
             </svg>
             SSID (Network name)
         </label>
-        <input type="text" id="ssidInput" placeholder="Example: MyHomeWiFi" autocomplete="off">
+        <input type="text" id="ssidInput" placeholder="Example: MyHomeWiFi or select from list" autocomplete="off">
     </div>
 
     <div class="input-group">
@@ -239,7 +478,7 @@
         </svg>
         Save settings
     </button>
-    <footer>⚡IoT Pump pressure controller | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</footer>
+    <footer>⚡IoT Pump controller | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</footer>
 </div>
 <div id="toastMsg" class="toast-msg">✓ Wi-Fi settings sent</div>
 
@@ -249,19 +488,244 @@
         const passwordInput = document.getElementById('passwordInput');
         const saveBtn = document.getElementById('saveBtn');
         const toast = document.getElementById('toastMsg');
+        const refreshBtn = document.getElementById('refreshWifiBtn');
 
-        let saveTimeout = null;
+        // Кастомный дропдаун элементы
+        const selectTrigger = document.getElementById('selectTrigger');
+        const selectDropdown = document.getElementById('selectDropdown');
+        const triggerTextSpan = document.getElementById('triggerText');
+
+        let isRefreshing = false;
+        let currentNetworks = [];
+        let dropdownOpen = false;
+
+        // Функция для отрисовки иконок мощности (полоски Wi-Fi)
+        function getSignalBars(rssi) {
+            let strength = 0;
+            if (rssi >= -50) strength = 4;
+            else if (rssi >= -65) strength = 3;
+            else if (rssi >= -75) strength = 2;
+            else if (rssi >= -85) strength = 1;
+            else strength = 0;
+
+            const bars = [];
+            for (let i = 0; i < 4; i++) {
+                const active = i < strength;
+                const height = 6 + (i * 2);
+                bars.push(`<div class="bar ${active ? 'active' : ''}" style="height: ${height}px; width: 4px;"></div>`);
+            }
+            return `<div class="signal-bars">${bars.join('')}</div>`;
+        }
+
+        function closeDropdown() {
+            if (!dropdownOpen) return;
+            dropdownOpen = false;
+            selectDropdown.classList.remove('show');
+            selectTrigger.classList.remove('open');
+        }
+
+        function toggleDropdown() {
+            if (dropdownOpen) {
+                closeDropdown();
+            } else {
+                dropdownOpen = true;
+                selectDropdown.classList.add('show');
+                selectTrigger.classList.add('open');
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function renderDropdown(networks) {
+            if (!networks.length) {
+                selectDropdown.innerHTML = '<div class="empty-option">📡 No Wi-Fi networks found</div>';
+                return;
+            }
+            // сортировка по силе сигнала (rssi убывание)
+            const sorted = [...networks].sort((a,b) => (b.rssi || -100) - (a.rssi || -100));
+            let html = '';
+            sorted.forEach(net => {
+                const ssid = net.ssid || "Hidden/Unknown";
+                const rssi = net.rssi !== undefined ? net.rssi : -80;
+                const auth = net.auth_mode || "Unknown";
+                const barsSvg = getSignalBars(rssi);
+                const escapedSsid = escapeHtml(ssid);
+                html += `
+                    <div class="dropdown-option" data-ssid="${escapeHtmlAttr(ssid)}" data-auth="${escapeHtmlAttr(auth)}">
+                        <div class="option-ssid" title="${escapedSsid}">${escapedSsid}</div>
+                        <div class="option-details">
+                            ${barsSvg}
+                            <span class="auth-badge">${escapeHtml(auth)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            selectDropdown.innerHTML = html;
+
+            // добавить обработчики кликов на опции
+            document.querySelectorAll('.dropdown-option').forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const selectedSsid = opt.getAttribute('data-ssid');
+                    if (selectedSsid) {
+                        ssidInput.value = selectedSsid;
+                        const authMode = opt.getAttribute('data-auth') || '';
+                        showToast(`✓ Selected: ${selectedSsid} ${authMode ? '('+authMode+')' : ''}`, false);
+                        closeDropdown();
+                    }
+                });
+            });
+        }
+
+        function escapeHtmlAttr(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        async function fetchWifiNetworks() {
+            if (isRefreshing) return;
+            isRefreshing = true;
+            refreshBtn.classList.add('rotating');
+            selectTrigger.style.pointerEvents = 'none';
+            selectDropdown.innerHTML = '<div class="empty-option">⏳ Scanning networks...</div>';
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 7000);
+                const response = await fetch('/wifi_list', {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    let errText = `HTTP ${response.status}`;
+                    try {
+                        const errJson = await response.json();
+                        errText = errJson.message || errJson.error || errText;
+                    } catch(e) {}
+                    throw new Error(errText);
+                }
+                const data = await response.json();
+                if (!data.success || !Array.isArray(data.networks)) {
+                    throw new Error('Invalid response format');
+                }
+                currentNetworks = data.networks;
+                renderDropdown(currentNetworks);
+                if (currentNetworks.length === 0) {
+                    showToast("📡 No networks found", false);
+                } else {
+                    showToast(`Found ${currentNetworks.length} network(s)`, false);
+                }
+            } catch (error) {
+                console.error('WiFi scan error:', error);
+                let errMsg = "✗ Failed to load networks";
+                if (error.name === 'AbortError') errMsg = "✗ Scan timeout (7s)";
+                else if (error.message) errMsg = `✗ ${error.message}`;
+                showToast(errMsg, true);
+                selectDropdown.innerHTML = '<div class="empty-option">⚠️ Scan failed, click refresh ↻</div>';
+                currentNetworks = [];
+            } finally {
+                isRefreshing = false;
+                refreshBtn.classList.remove('rotating');
+                selectTrigger.style.pointerEvents = 'auto';
+            }
+        }
+
+        // Отправка настроек Wi-Fi
+        async function sendWiFiSettings() {
+            let ssid = ssidInput.value.trim();
+            let password = passwordInput.value;
+
+            if (ssid === "") {
+                showToast("✗ Please enter or select SSID", true);
+                ssidInput.style.borderColor = "#e94f32";
+                setTimeout(() => ssidInput.style.borderColor = "", 1000);
+                return;
+            }
+
+            const payload = { ssid: ssid, password: password };
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const response = await fetch('/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    let errorText = `Error ${response.status}`;
+                    try {
+                        const errData = await response.json();
+                        errorText = errData.message || errData.error || errorText;
+                    } catch(e) {}
+                    throw new Error(errorText);
+                }
+                const result = await response.json();
+                console.log('Wi-Fi settings saved:', result);
+                showToast(`✓ Wi-Fi credentials sent to device`, false);
+                passwordInput.value = "";
+            } catch (error) {
+                let errMsg = "✗ Connection failed";
+                if (error.name === 'AbortError') errMsg = "✗ Request timeout (5s)";
+                else if (error.message) errMsg = `✗ ${error.message}`;
+                showToast(errMsg, true);
+            }
+        }
+
+        function debounceSend() {
+            if (window.saveTimeout) clearTimeout(window.saveTimeout);
+            window.saveTimeout = setTimeout(() => sendWiFiSettings(), 200);
+        }
+
+        // --- Инициализация событий ---
+        saveBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            debounceSend();
+        });
+
+        [ssidInput, passwordInput].forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    debounceSend();
+                }
+            });
+        });
+
+        // Кастомный дропдаун: открыть/закрыть
+        selectTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleDropdown();
+        });
+
+        // Закрыть при клике вне
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('customSelectContainer');
+            if (container && !container.contains(e.target)) {
+                closeDropdown();
+            }
+        });
+
+        // Обновление списка при нажатии на кнопку обновления
+        refreshBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            fetchWifiNetworks();
+        });
 
         // Toggle password visibility
         const togglePasswordBtn = document.getElementById('togglePassword');
         const passwordField = document.getElementById('passwordInput');
-
         if (togglePasswordBtn && passwordField) {
             togglePasswordBtn.addEventListener('click', function() {
                 const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordField.setAttribute('type', type);
-
-                // Change eye icon
                 const svg = this.querySelector('svg');
                 if (type === 'text') {
                     svg.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
@@ -269,14 +733,15 @@
                     svg.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
                 }
             });
-
-            togglePasswordBtn.addEventListener('mouseenter', () => {
-                togglePasswordBtn.style.opacity = '1';
-            });
-            togglePasswordBtn.addEventListener('mouseleave', () => {
-                togglePasswordBtn.style.opacity = '0.7';
-            });
+            togglePasswordBtn.addEventListener('mouseenter', () => { togglePasswordBtn.style.opacity = '1'; });
+            togglePasswordBtn.addEventListener('mouseleave', () => { togglePasswordBtn.style.opacity = '0.7'; });
         }
+
+        fetchWifiNetworks();
+
+        window.addEventListener('beforeunload', () => {
+            if (window.saveTimeout) clearTimeout(window.saveTimeout);
+        });
 
         function showToast(message, isError = false) {
             toast.innerText = message;
@@ -294,89 +759,8 @@
                     toast.style.borderColor = '#3c936e';
                     toast.style.color = '#c2f0d6';
                 }, 300);
-            }, 1800);
+            }, 2000);
         }
-
-        async function sendWiFiSettings() {
-            let ssid = ssidInput.value.trim();
-            let password = passwordInput.value;
-
-            if (ssid === "") {
-                showToast("✗ Укажите SSID", true);
-                ssidInput.style.borderColor = "#e94f32";
-                setTimeout(() => ssidInput.style.borderColor = "", 1000);
-                return;
-            }
-
-            const payload = {
-                ssid: ssid,
-                password: password
-            };
-
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-                const response = await fetch('/settings', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    let errorText = `Ошибка ${response.status}`;
-                    try {
-                        const errData = await response.json();
-                        errorText = errData.message || errData.error || errorText;
-                    } catch(e) {}
-                    throw new Error(errorText);
-                }
-
-                const result = await response.json();
-                console.log('Wi-Fi settings saved:', result);
-                showToast("✓ SSID and password sent!");
-
-                passwordInput.value = "";
-
-            } catch (error) {
-                console.error('Error sending Wi-Fi settings:', error);
-                let errMsg = "✗ Connection error";
-                if (error.name === 'AbortError') errMsg = "✗ timeout";
-                else if (error.message) errMsg = `✗ ${error.message}`;
-                showToast(errMsg, true);
-            }
-        }
-
-        function debounceSend() {
-            if (saveTimeout) clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => {
-                sendWiFiSettings();
-            }, 200);
-        }
-
-        saveBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            debounceSend();
-        });
-
-        const inputs = [ssidInput, passwordInput];
-        inputs.forEach(input => {
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    debounceSend();
-                }
-            });
-        });
-
-        window.addEventListener('beforeunload', () => {
-            if (saveTimeout) clearTimeout(saveTimeout);
-        });
     })();
 </script>
 </body>
