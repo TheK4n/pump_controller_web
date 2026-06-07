@@ -1018,25 +1018,16 @@ static app_error_t setup_http_server_start(void) {
     CHECK_ERROR(httpd_start(&server, &config), APP_ERR_HTTP_SERVER_START_FAIL);
     ESP_LOGI(TAG, "Setup HTTP server started on port %d", config.server_port);
 
-    httpd_uri_t root = {
-        .uri = "/", .method = HTTP_GET, .handler = setup_get_handler
+    httpd_uri_t uris[] = {
+        {.uri = "/", .method = HTTP_GET, .handler = setup_get_handler},
+        {.uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get_handler},
+        {.uri = "/settings", .method = HTTP_POST, .handler = setup_set_settings_handler},
+        {.uri = "/wifi_list", .method = HTTP_GET, .handler = setup_get_wifi_list_handler},
     };
-    CHECK_ERROR(httpd_register_uri_handler(server, &root), APP_ERR_HTTP_SERVER_START_FAIL);
 
-    httpd_uri_t favicon = {
-        .uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get_handler
-    };
-    CHECK_ERROR(httpd_register_uri_handler(server, &favicon), APP_ERR_HTTP_SERVER_START_FAIL);
-
-    httpd_uri_t settings = {
-        .uri = "/settings", .method = HTTP_POST, .handler = setup_set_settings_handler
-    };
-    CHECK_ERROR(httpd_register_uri_handler(server, &settings), APP_ERR_HTTP_SERVER_START_FAIL);
-
-    httpd_uri_t wifi_list = {
-        .uri = "/wifi_list", .method = HTTP_GET, .handler = setup_get_wifi_list_handler
-    };
-    CHECK_ERROR(httpd_register_uri_handler(server, &wifi_list), APP_ERR_HTTP_SERVER_START_FAIL);
+    for (int i = 0; i < sizeof(uris) / sizeof(httpd_uri_t); i++) {
+        CHECK_ERROR(httpd_register_uri_handler(server, &uris[i]), APP_ERR_HTTP_SERVER_START_FAIL);
+    }
 
     return ERR_OK;
 }
