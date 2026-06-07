@@ -1,5 +1,5 @@
-# 🚀 Pump Controller ESP32
-## Web-Controlled Smart Pump System
+# Pump Controller ESP32
+Web-Controlled Smart Pump System
 
 <div align="center">
   <img src="./.gitassets/index.jpg" alt="Main page" width="300">
@@ -11,20 +11,21 @@
 ---
 
 
-## ✨ Features
-- 📡 Web-based pressure monitoring
-- 🔧 OTA-ready & configurable via browser
-- 💡 LED status indicators
-- 🔁 Auto-reset & fail-safe AP mode
-- 🧠 Non-volatile memory for settings
+## Features
+- Web-based pressure monitoring
+- OTA-ready & configurable via browser
+- Auto-reset & fail-safe AP mode
 
 ---
 
 
 ## 🛠️ Build & Flash
-> 💡 *Requires ESP-IDF framework and `just` task runner*
+> [!IMPORTANT]
+>
+> *Requires ESP-IDF framework and `just` task runner*
 
-```bash
+Connect your esp32 and run:
+```sh
 PORT="/dev/ttyUSB0" \
 ESP_IDF="~/playground/esp-idf/"
 just build flash
@@ -33,29 +34,31 @@ just build flash
 ---
 
 
-## 🌐First-Time Setup
+## First-Time Setup
 On **first boot**, the device creates a captive Wi-Fi access point:
-
 - **SSID:** `pumpcontroller`
 - **IP:** `192.168.4.1`
 - **Port:** `80`
 
+
 ### Steps:
 1. Connect to `pumpcontroller` Wi-Fi
-2. Open browser → `http://192.168.4.1`
+2. Open browser -> `http://192.168.4.1`
 3. Enter your **home Wi-Fi SSID + password**
 4. Device reboots → joins your network
 5. Find its IP in your router's DHCP list
 
-✅ That IP becomes your **pump control dashboard** 🎯
+That IP becomes your **pump control dashboard**
 
-> ⚠️ If you enter wrong credentials, the device will **not** connect.
+> [!WARNING]
+>
+> If you enter wrong credentials, the device will **not** connect.
 > You’ll need to **factory reset** and try again.
 
 ---
 
 
-## 🔄 Factory Reset
+## Factory Reset
 1. **Short pin `D15` to GND**
 2. **Power on** the device
 3. LED blinks **3 times** 🔴🔴🔴
