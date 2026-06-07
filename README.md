@@ -2,6 +2,11 @@
 Контроллер насоса с веб интерфейсом.
 
 
+<img src="./.gitassets/index.jpg" alt="Main page atl">
+
+<img src="./.gitassets/setup.jpg" alt="Setup page atl">
+
+
 ## Сборка и прошивка
 ```sh
 PORT="/dev/ttyUSB0" \

@@ -1,0 +1,2 @@
+.gitassets/index.jpg filter=lfs diff=lfs merge=lfs -text
+.gitassets/setup.jpg filter=lfs diff=lfs merge=lfs -text
