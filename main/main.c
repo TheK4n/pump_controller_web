@@ -87,6 +87,8 @@
 #define DEFAULT_THRESHOLD_LOW   100
 #define DEFAULT_THRESHOLD_UP    300
 
+#define MAX_AP_SCAN_RESULTS 20
+
 // ============================================================================
 // Error codes
 // ============================================================================
@@ -507,6 +509,9 @@ static app_error_t wifi_softap_init(void) {
     esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
     CHECK_PTR(ap_netif, APP_ERR_WIFI_INIT_FAIL);
 
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    CHECK_PTR(sta_netif, APP_ERR_WIFI_INIT_FAIL);
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     CHECK_ERROR(esp_wifi_init(&cfg), APP_ERR_WIFI_INIT_FAIL);
 
@@ -525,8 +530,23 @@ static app_error_t wifi_softap_init(void) {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    CHECK_ERROR(esp_wifi_set_mode(WIFI_MODE_AP), APP_ERR_WIFI_INIT_FAIL);
+    CHECK_ERROR(esp_wifi_set_mode(WIFI_MODE_APSTA), APP_ERR_WIFI_INIT_FAIL);
+
     CHECK_ERROR(esp_wifi_set_config(WIFI_IF_AP, &wifi_config), APP_ERR_WIFI_INIT_FAIL);
+
+    wifi_config_t sta_config = {
+        .sta = {
+            .ssid = "",
+            .password = "",
+            .scan_method = WIFI_FAST_SCAN,
+            .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
+            .threshold.rssi = -127,
+            .threshold.authmode = WIFI_AUTH_OPEN,
+        },
+    };
+
+    CHECK_ERROR(esp_wifi_set_config(WIFI_IF_STA, &sta_config), APP_ERR_WIFI_INIT_FAIL);
+
     CHECK_ERROR(esp_wifi_start(), APP_ERR_WIFI_INIT_FAIL);
 
     esp_netif_ip_info_t ip_info;
@@ -599,15 +619,37 @@ static app_error_t mdns_init_service(void) {
 // ============================================================================
 
 static esp_err_t send_json_response(httpd_req_t *req, const char *format, ...) {
-    char response[256];
+    esp_err_t ret = ESP_OK;
+    char *response = NULL;
     va_list args;
+    va_list args_copy;
+
     va_start(args, format);
-    vsnprintf(response, sizeof(response), format, args);
+    va_copy(args_copy, args);
+    int len = vsnprintf(NULL, 0, format, args_copy);
+    va_end(args_copy);
+    va_end(args);
+
+    if (len < 0) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Format error");
+        return ESP_FAIL;
+    }
+
+    response = malloc(len + 1);
+    if (response == NULL) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+        return ESP_FAIL;
+    }
+
+    va_start(args, format);
+    vsnprintf(response, len + 1, format, args);
     va_end(args);
 
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response, strlen(response));
-    return ESP_OK;
+    ret = httpd_resp_send(req, response, len);
+
+    free(response);
+    return ret;
 }
 
 static esp_err_t receive_http_content(httpd_req_t *req, char **content) {
@@ -796,6 +838,139 @@ static esp_err_t setup_set_settings_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+
+static esp_err_t setup_get_wifi_list_handler(httpd_req_t *req) {
+    esp_err_t ret;
+    uint16_t ap_count = 0;
+    wifi_ap_record_t ap_info[MAX_AP_SCAN_RESULTS];
+    memset(ap_info, 0, sizeof(ap_info));
+
+    // Получаем текущий режим Wi-Fi
+    wifi_mode_t current_mode;
+    ret = esp_wifi_get_mode(&current_mode);
+    if (ret != ESP_OK) {
+        send_json_response(req, "{\"success\":false,\"error\":\"Failed to get WiFi mode\"}");
+        return ESP_OK;
+    }
+
+    // Запускаем сканирование
+    wifi_scan_config_t scan_config = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = true,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time = {
+            .active = {
+                .min = 100,
+                .max = 300
+            }
+        }
+    };
+
+    ret = esp_wifi_scan_start(&scan_config, true);
+    if (ret != ESP_OK) {
+        send_json_response(req, "{\"success\":false,\"error\":\"Failed to start WiFi scan\"}");
+        return ESP_OK;
+    }
+
+    ret = esp_wifi_scan_get_ap_num(&ap_count);
+    if (ret != ESP_OK) {
+        send_json_response(req, "{\"success\":false,\"error\":\"Failed to get AP count\"}");
+        return ESP_OK;
+    }
+
+    if (ap_count > MAX_AP_SCAN_RESULTS) {
+        ap_count = MAX_AP_SCAN_RESULTS;
+    }
+
+    ret = esp_wifi_scan_get_ap_records(&ap_count, ap_info);
+    if (ret != ESP_OK) {
+        send_json_response(req, "{\"success\":false,\"error\":\"Failed to get AP records\"}");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        send_json_response(req, "{\"success\":false,\"error\":\"JSON creation failed\"}");
+        return ESP_OK;
+    }
+
+    cJSON_AddBoolToObject(root, "success", true);
+
+    cJSON *networks_array = cJSON_CreateArray();
+    if (networks_array == NULL) {
+        cJSON_Delete(root);
+        send_json_response(req, "{\"success\":false,\"error\":\"JSON array creation failed\"}");
+        return ESP_OK;
+    }
+
+    for (int i = 0; i < ap_count; i++) {
+        cJSON *network = cJSON_CreateObject();
+        if (network == NULL) {
+            continue;
+        }
+
+        char ssid_str[33];
+        memcpy(ssid_str, ap_info[i].ssid, 32);
+        ssid_str[32] = '\0';
+        cJSON_AddStringToObject(network, "ssid", ssid_str);
+
+        // RSSI (сигнал)
+        cJSON_AddNumberToObject(network, "rssi", ap_info[i].rssi);
+
+        // Тип шифрования (в читаемом виде)
+        const char *auth_mode_str;
+        switch (ap_info[i].authmode) {
+            case WIFI_AUTH_OPEN:
+                auth_mode_str = "Open";
+                break;
+            case WIFI_AUTH_WEP:
+                auth_mode_str = "WEP";
+                break;
+            case WIFI_AUTH_WPA_PSK:
+                auth_mode_str = "WPA-PSK";
+                break;
+            case WIFI_AUTH_WPA2_PSK:
+                auth_mode_str = "WPA2-PSK";
+                break;
+            case WIFI_AUTH_WPA_WPA2_PSK:
+                auth_mode_str = "WPA/WPA2-PSK";
+                break;
+            case WIFI_AUTH_WPA3_PSK:
+                auth_mode_str = "WPA3-PSK";
+                break;
+            case WIFI_AUTH_WPA2_WPA3_PSK:
+                auth_mode_str = "WPA2/WPA3-PSK";
+                break;
+            default:
+                auth_mode_str = "Unknown";
+                break;
+        }
+        cJSON_AddStringToObject(network, "auth_mode", auth_mode_str);
+
+        cJSON_AddItemToArray(networks_array, network);
+    }
+
+    cJSON_AddItemToObject(root, "networks", networks_array);
+    cJSON_AddNumberToObject(root, "count", ap_count);
+
+    char *json_string = cJSON_PrintUnformatted(root);
+    if (json_string == NULL) {
+        cJSON_Delete(root);
+        send_json_response(req, "{\"success\":false,\"error\":\"JSON string conversion failed\"}");
+        return ESP_OK;
+    }
+
+    send_json_response(req, json_string);
+
+    free(json_string);
+    cJSON_Delete(root);
+
+    return ESP_OK;
+}
+
+
 // ============================================================================
 // HTTP server tasks
 // ============================================================================
@@ -831,7 +1006,7 @@ static app_error_t setup_http_server_start(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = CONFIG_WEBINTERFACE_PORT;
     config.max_uri_handlers = 10;
-    config.stack_size = 4096;
+    config.stack_size = 8192;
 
     CHECK_ERROR(httpd_start(&server, &config), APP_ERR_HTTP_SERVER_START_FAIL);
     ESP_LOGI(TAG, "Setup HTTP server started on port %d", config.server_port);
@@ -845,6 +1020,11 @@ static app_error_t setup_http_server_start(void) {
         .uri = "/settings", .method = HTTP_POST, .handler = setup_set_settings_handler
     };
     CHECK_ERROR(httpd_register_uri_handler(server, &settings), APP_ERR_HTTP_SERVER_START_FAIL);
+
+    httpd_uri_t wifi_list = {
+        .uri = "/wifi_list", .method = HTTP_GET, .handler = setup_get_wifi_list_handler
+    };
+    CHECK_ERROR(httpd_register_uri_handler(server, &wifi_list), APP_ERR_HTTP_SERVER_START_FAIL);
 
     return ERR_OK;
 }
