@@ -2,9 +2,10 @@
 Контроллер насоса с веб интерфейсом.
 
 
-<img src="./.gitassets/index.jpg" alt="Main page atl">
-
-<img src="./.gitassets/setup.jpg" alt="Setup page atl">
+<div style="display: flex; gap: 10px;">
+  <img src="./.gitassets/index.jpg" alt="Main page" width="300">
+  <img src="./.gitassets/setup.jpg" alt="Setup page" width="300">
+</div>
 
 
 ## Сборка и прошивка
