@@ -30,8 +30,10 @@
 #include "lwip/inet.h"
 
 #include "sdkconfig.h"
+
 #include "frontend.h"
 #include "setup_frontend.h"
+#include "favicon_svg.h"
 
 // ============================================================================
 // Configuration validation
@@ -619,8 +621,8 @@ static app_error_t mdns_init_service(void) {
 // ============================================================================
 
 static esp_err_t favicon_get_handler(httpd_req_t *req) {
-    httpd_resp_set_status(req, "204 No Content");
-    httpd_resp_send(req, NULL, 0);
+    httpd_resp_set_type(req, "image/svg+xml");
+    httpd_resp_send(req, (const char*)assets_favicon_svg, assets_favicon_svg_len);
     return ESP_OK;
 }
 
@@ -993,7 +995,7 @@ static app_error_t http_server_start(void) {
 
     httpd_uri_t uris[] = {
         {.uri = "/", .method = HTTP_GET, .handler = root_get_handler},
-        {.uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get_handler},
+        {.uri = "/favicon.svg", .method = HTTP_GET, .handler = favicon_get_handler},
         {.uri = "/pressure", .method = HTTP_GET, .handler = current_pressure_handler},
         {.uri = "/state", .method = HTTP_GET, .handler = pump_state_handler},
         {.uri = "/thresholds", .method = HTTP_GET, .handler = get_thresholds_handler},
@@ -1020,7 +1022,7 @@ static app_error_t setup_http_server_start(void) {
 
     httpd_uri_t uris[] = {
         {.uri = "/", .method = HTTP_GET, .handler = setup_get_handler},
-        {.uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get_handler},
+        {.uri = "/favicon.svg", .method = HTTP_GET, .handler = favicon_get_handler},
         {.uri = "/settings", .method = HTTP_POST, .handler = setup_set_settings_handler},
         {.uri = "/wifi_list", .method = HTTP_GET, .handler = setup_get_wifi_list_handler},
     };

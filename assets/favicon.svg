@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <style>
+      /* Light theme (default) */
+      .gauge-stroke { stroke: #1A1A1A; }
+      .gauge-fill { fill: #1A1A1A; }
+      .danger-zone { fill: #E53935; opacity: 0.85; }
+
+      /* Dark theme via media query */
+      @media (prefers-color-scheme: dark) {
+        .gauge-stroke { stroke: #E8E8E8; }
+        .gauge-fill { fill: #E8E8E8; }
+        .danger-zone { fill: #FF6B6B; opacity: 0.9; }
+      }
+    </style>
+  </defs>
+
+  <circle cx="50" cy="50" r="45" fill="none" class="gauge-stroke" stroke-width="3.5" stroke-linecap="round"/>
+
+  <rect x="44" y="90" width="12" height="10" class="gauge-fill" rx="1.5"/>
+  <polygon points="47,100 53,100 56,106 44,106" class="gauge-fill"/>
+
+  <line x1="18" y1="50" x2="26" y2="50" class="gauge-stroke" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="50" y1="13" x2="50" y2="21" class="gauge-stroke" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="82" y1="50" x2="74" y2="50" class="gauge-stroke" stroke-width="2.5" stroke-linecap="round"/>
+
+  <path d="M 74,50 A 24,24 0 0,1 66,71 L 60,65 A 18,18 0 0,0 66,50 Z" class="danger-zone"/>
+
+  <line x1="50" y1="52" x2="62" y2="40" class="gauge-stroke" stroke-width="3" stroke-linecap="round"/>
+
+  <circle cx="50" cy="52" r="3.5" class="gauge-fill"/>
+</svg>

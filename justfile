@@ -16,6 +16,8 @@ build:
     sed -i '1i\static const ' main/frontend.h
     xxd -i assets/setup.html > main/setup_frontend.h
     sed -i '1i\static const ' main/setup_frontend.h
+    xxd -i assets/favicon.svg > main/favicon_svg.h
+    sed -i '1i\static const ' main/favicon_svg.h
     idf.py build
 
 

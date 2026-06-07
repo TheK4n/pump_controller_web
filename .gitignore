@@ -3,4 +3,5 @@ sdkconfig
 sdkconfig.old
 main/frontend.h
 main/setup_frontend.h
+main/favicon_svg.h
 managed_components/
