@@ -171,21 +171,19 @@
             opacity: 1;
         }
 
-        .hint {
-            font-size: 0.7rem;
-            color: #6f8aae;
-            margin-top: 24px;
-            border-top: 1px solid rgba(72, 92, 118, 0.4);
-            padding-top: 20px;
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-        }
-
         @media (max-width: 500px) {
             .card { padding: 24px 20px 32px; }
             h1 { font-size: 1.5rem; }
             .save-btn { font-size: 1.2rem; }
+        }
+
+        footer {
+            text-align: center;
+            font-size: 0.7rem;
+            margin-top: 22px;
+            color: #6f8aae;
+            opacity: 0.7;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -222,7 +220,15 @@
             </svg>
             Пароль
         </label>
-        <input type="password" id="passwordInput" placeholder="··········" autocomplete="off">
+        <div style="position: relative;">
+            <input type="password" id="passwordInput" placeholder="··········" autocomplete="off" style="padding-right: 50px;">
+            <button type="button" id="togglePassword" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; opacity: 0.7; transition: opacity 0.2s;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8ba3c2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <button class="save-btn" id="saveBtn">
@@ -233,9 +239,7 @@
         </svg>
         Save settings
     </button>
-    <div class="hint">
-        <span>⚡IoT контроллер давления | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</span>
-    </div>
+    <footer>⚡IoT контроллер давления | © Vladislav Kan &lt;thek4n@yandex.ru&gt;</footer>
 </div>
 <div id="toastMsg" class="toast-msg">✓ Wi-Fi settings sent</div>
 
@@ -247,6 +251,32 @@
         const toast = document.getElementById('toastMsg');
 
         let saveTimeout = null;
+
+        // Toggle password visibility
+        const togglePasswordBtn = document.getElementById('togglePassword');
+        const passwordField = document.getElementById('passwordInput');
+
+        if (togglePasswordBtn && passwordField) {
+            togglePasswordBtn.addEventListener('click', function() {
+                const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordField.setAttribute('type', type);
+
+                // Change eye icon
+                const svg = this.querySelector('svg');
+                if (type === 'text') {
+                    svg.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+                } else {
+                    svg.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+                }
+            });
+
+            togglePasswordBtn.addEventListener('mouseenter', () => {
+                togglePasswordBtn.style.opacity = '1';
+            });
+            togglePasswordBtn.addEventListener('mouseleave', () => {
+                togglePasswordBtn.style.opacity = '0.7';
+            });
+        }
 
         function showToast(message, isError = false) {
             toast.innerText = message;
