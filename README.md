@@ -53,11 +53,12 @@ That IP becomes your **pump control dashboard**
 > [!WARNING]
 >
 > If you enter wrong credentials, the device will **not** connect.
-> You’ll need to **factory reset** and try again.
+> You’ll need to [**factory reset**](#factory_reset) and try again.
 
 ---
 
 
+<a id="factory_reset"></a>
 ## Factory Reset
 1. **Short pin `D15` to GND**
 2. **Power on** the device
